@@ -1,0 +1,1288 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crea - Brainstorming Colaborativo</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .fade-in {
+            animation: fadeIn 0.5s ease-out;
+        }
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        @keyframes slideIn {
+            from { transform: translateX(-100%); }
+            to { transform: translateX(0); }
+        }
+        .slide-in {
+            animation: slideIn 0.3s ease-out;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div id="app"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const CHAR_LIMIT = 180;
+        const COMMENT_LIMIT = 120;
+        const DIAS_AUTO_ELIMINAR = 30;
+
+        const ESTADOS = {
+            INCUBANDO: 'incubando',
+            ACTIVA: 'activa',
+            MUERTA: 'muerta',
+            APROBADA: 'aprobada',
+            RECHAZADA: 'rechazada'
+        };
+
+        // Utilidades para gestión de datos
+        const DataManager = {
+            // Usuarios
+            getUsuarios: () => JSON.parse(localStorage.getItem('crea-usuarios') || '[]'),
+            guardarUsuarios: (usuarios) => localStorage.setItem('crea-usuarios', JSON.stringify(usuarios)),
+            
+            // Sesión actual
+            getSesion: () => JSON.parse(localStorage.getItem('crea-sesion') || 'null'),
+            guardarSesion: (usuario) => localStorage.setItem('crea-sesion', JSON.stringify(usuario)),
+            cerrarSesion: () => localStorage.removeItem('crea-sesion'),
+            
+            // Ideas por usuario
+            getIdeasUsuario: (usuarioId) => {
+                const key = `crea-ideas-${usuarioId}`;
+                return JSON.parse(localStorage.getItem(key) || '[]');
+            },
+            guardarIdeasUsuario: (usuarioId, ideas) => {
+                const key = `crea-ideas-${usuarioId}`;
+                localStorage.setItem(key, JSON.stringify(ideas));
+            },
+            
+            // Salas por usuario
+            getSalasUsuario: (usuarioId) => {
+                const key = `crea-salas-${usuarioId}`;
+                const salas = JSON.parse(localStorage.getItem(key) || 'null');
+                if (!salas) {
+                    // Salas por defecto
+                    const salasDefecto = [
+                        { id: 'trabajo', nombre: 'Trabajo', color: 'blue' },
+                        { id: 'personal', nombre: 'Personal', color: 'green' },
+                        { id: 'proyectos', nombre: 'Proyectos', color: 'purple' }
+                    ];
+                    DataManager.guardarSalasUsuario(usuarioId, salasDefecto);
+                    return salasDefecto;
+                }
+                return salas;
+            },
+            guardarSalasUsuario: (usuarioId, salas) => {
+                const key = `crea-salas-${usuarioId}`;
+                localStorage.setItem(key, JSON.stringify(salas));
+            },
+            
+            // Exportar datos del usuario
+            exportarDatos: (usuarioId) => {
+                return {
+                    ideas: DataManager.getIdeasUsuario(usuarioId),
+                    salas: DataManager.getSalasUsuario(usuarioId),
+                    fecha: new Date().toISOString()
+                };
+            },
+            
+            // Importar datos del usuario
+            importarDatos: (usuarioId, datos) => {
+                if (datos.ideas) DataManager.guardarIdeasUsuario(usuarioId, datos.ideas);
+                if (datos.salas) DataManager.guardarSalasUsuario(usuarioId, datos.salas);
+            }
+        };
+
+        function App() {
+            const [usuarioActual, setUsuarioActual] = useState(null);
+            const [vista, setVista] = useState('login'); // login, registro, app
+
+            useEffect(() => {
+                const sesion = DataManager.getSesion();
+                if (sesion) {
+                    setUsuarioActual(sesion);
+                    setVista('app');
+                }
+            }, []);
+
+            function handleLogin(usuario) {
+                setUsuarioActual(usuario);
+                DataManager.guardarSesion(usuario);
+                setVista('app');
+            }
+
+            function handleLogout() {
+                setUsuarioActual(null);
+                DataManager.cerrarSesion();
+                setVista('login');
+            }
+
+            if (vista === 'login') {
+                return <Login onLogin={handleLogin} onRegistro={() => setVista('registro')} />;
+            }
+
+            if (vista === 'registro') {
+                return <Registro onRegistro={handleLogin} onVolver={() => setVista('login')} />;
+            }
+
+            return <AppPrincipal usuario={usuarioActual} onLogout={handleLogout} />;
+        }
+
+        function Login({ onLogin, onRegistro }) {
+            const [email, setEmail] = useState('');
+            const [password, setPassword] = useState('');
+            const [error, setError] = useState('');
+            const [mostrarRecuperar, setMostrarRecuperar] = useState(false);
+
+            function handleSubmit(e) {
+                e.preventDefault();
+                setError('');
+
+                const usuarios = DataManager.getUsuarios();
+                const usuario = usuarios.find(u => u.email === email && u.password === password);
+
+                if (usuario) {
+                    onLogin(usuario);
+                } else {
+                    setError('Email o contraseña incorrectos');
+                }
+            }
+
+            function handleRecuperar(e) {
+                e.preventDefault();
+                const usuarios = DataManager.getUsuarios();
+                const usuario = usuarios.find(u => u.email === email);
+
+                if (usuario) {
+                    alert(`Tu contraseña es: ${usuario.password}\n\n(En la versión real, esto se enviaría por email)`);
+                    setMostrarRecuperar(false);
+                } else {
+                    setError('No existe una cuenta con ese email');
+                }
+            }
+
+            return (
+                <div className="min-h-screen gradient-bg flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md fade-in">
+                        <div className="text-center mb-8">
+                            <h1 className="text-4xl font-bold text-purple-600 mb-2">✨ Crea</h1>
+                            <p className="text-gray-600">Brainstorming colaborativo</p>
+                        </div>
+
+                        {!mostrarRecuperar ? (
+                            <form onSubmit={handleSubmit}>
+                                <div className="mb-4">
+                                    <label className="block text-gray-700 text-sm font-semibold mb-2">
+                                        Email
+                                    </label>
+                                    <input
+                                        type="email"
+                                        value={email}
+                                        onChange={(e) => setEmail(e.target.value)}
+                                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none"
+                                        required
+                                    />
+                                </div>
+
+                                <div className="mb-6">
+                                    <label className="block text-gray-700 text-sm font-semibold mb-2">
+                                        Contraseña
+                                    </label>
+                                    <input
+                                        type="password"
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
+                                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none"
+                                        required
+                                    />
+                                </div>
+
+                                {error && (
+                                    <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm">
+                                        {error}
+                                    </div>
+                                )}
+
+                                <button
+                                    type="submit"
+                                    className="w-full bg-purple-600 text-white py-3 rounded-lg font-semibold hover:bg-purple-700 transition-colors mb-4"
+                                >
+                                    Iniciar Sesión
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={() => setMostrarRecuperar(true)}
+                                    className="w-full text-purple-600 text-sm hover:underline mb-2"
+                                >
+                                    ¿Olvidaste tu contraseña?
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={onRegistro}
+                                    className="w-full text-gray-600 text-sm hover:underline"
+                                >
+                                    ¿No tienes cuenta? Regístrate
+                                </button>
+                            </form>
+                        ) : (
+                            <form onSubmit={handleRecuperar}>
+                                <h2 className="text-xl font-semibold mb-4 text-gray-800">Recuperar Contraseña</h2>
+                                <p className="text-sm text-gray-600 mb-4">
+                                    Ingresa tu email y te mostraremos tu contraseña (en la versión real se enviaría por correo)
+                                </p>
+
+                                <div className="mb-4">
+                                    <label className="block text-gray-700 text-sm font-semibold mb-2">
+                                        Email
+                                    </label>
+                                    <input
+                                        type="email"
+                                        value={email}
+                                        onChange={(e) => setEmail(e.target.value)}
+                                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none"
+                                        required
+                                    />
+                                </div>
+
+                                {error && (
+                                    <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm">
+                                        {error}
+                                    </div>
+                                )}
+
+                                <button
+                                    type="submit"
+                                    className="w-full bg-purple-600 text-white py-3 rounded-lg font-semibold hover:bg-purple-700 transition-colors mb-4"
+                                >
+                                    Recuperar
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={() => setMostrarRecuperar(false)}
+                                    className="w-full text-gray-600 text-sm hover:underline"
+                                >
+                                    Volver al login
+                                </button>
+                            </form>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        function Registro({ onRegistro, onVolver }) {
+            const [nombre, setNombre] = useState('');
+            const [email, setEmail] = useState('');
+            const [password, setPassword] = useState('');
+            const [confirmarPassword, setConfirmarPassword] = useState('');
+            const [error, setError] = useState('');
+
+            function handleSubmit(e) {
+                e.preventDefault();
+                setError('');
+
+                if (password !== confirmarPassword) {
+                    setError('Las contraseñas no coinciden');
+                    return;
+                }
+
+                if (password.length < 6) {
+                    setError('La contraseña debe tener al menos 6 caracteres');
+                    return;
+                }
+
+                const usuarios = DataManager.getUsuarios();
+                
+                if (usuarios.find(u => u.email === email)) {
+                    setError('Ya existe una cuenta con ese email');
+                    return;
+                }
+
+                const nuevoUsuario = {
+                    id: Date.now().toString(),
+                    nombre,
+                    email,
+                    password,
+                    fechaCreacion: Date.now()
+                };
+
+                usuarios.push(nuevoUsuario);
+                DataManager.guardarUsuarios(usuarios);
+                onRegistro(nuevoUsuario);
+            }
+
+            return (
+                <div className="min-h-screen gradient-bg flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md fade-in">
+                        <div className="text-center mb-8">
+                            <h1 className="text-4xl font-bold text-purple-600 mb-2">✨ Crea</h1>
+                            <p className="text-gray-600">Crear nueva cuenta</p>
+                        </div>
+
+                        <form onSubmit={handleSubmit}>
+                            <div className="mb-4">
+                                <label className="block text-gray-700 text-sm font-semibold mb-2">
+                                    Nombre
+                                </label>
+                                <input
+                                    type="text"
+                                    value={nombre}
+                                    onChange={(e) => setNombre(e.target.value)}
+                                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none"
+                                    required
+                                />
+                            </div>
+
+                            <div className="mb-4">
+                                <label className="block text-gray-700 text-sm font-semibold mb-2">
+                                    Email
+                                </label>
+                                <input
+                                    type="email"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none"
+                                    required
+                                />
+                            </div>
+
+                            <div className="mb-4">
+                                <label className="block text-gray-700 text-sm font-semibold mb-2">
+                                    Contraseña
+                                </label>
+                                <input
+                                    type="password"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none"
+                                    required
+                                />
+                            </div>
+
+                            <div className="mb-6">
+                                <label className="block text-gray-700 text-sm font-semibold mb-2">
+                                    Confirmar Contraseña
+                                </label>
+                                <input
+                                    type="password"
+                                    value={confirmarPassword}
+                                    onChange={(e) => setConfirmarPassword(e.target.value)}
+                                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none"
+                                    required
+                                />
+                            </div>
+
+                            {error && (
+                                <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm">
+                                    {error}
+                                </div>
+                            )}
+
+                            <button
+                                type="submit"
+                                className="w-full bg-purple-600 text-white py-3 rounded-lg font-semibold hover:bg-purple-700 transition-colors mb-4"
+                            >
+                                Crear Cuenta
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={onVolver}
+                                className="w-full text-gray-600 text-sm hover:underline"
+                            >
+                                ¿Ya tienes cuenta? Inicia sesión
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            );
+        }
+
+        function AppPrincipal({ usuario, onLogout }) {
+            const [ideas, setIdeas] = useState([]);
+            const [salas, setSalas] = useState([]);
+            const [salaActual, setSalaActual] = useState(null);
+            const [vistaActual, setVistaActual] = useState('todas');
+            const [mostrarSidebar, setMostrarSidebar] = useState(true);
+            const [mostrarNuevaSala, setMostrarNuevaSala] = useState(false);
+
+            useEffect(() => {
+                const ideasCargadas = DataManager.getIdeasUsuario(usuario.id);
+                const salasUsuario = DataManager.getSalasUsuario(usuario.id);
+                
+                // Limpiar ideas rechazadas antiguas
+                const ideasLimpiadas = limpiarIdeasRechazadas(ideasCargadas);
+                
+                setIdeas(ideasLimpiadas);
+                setSalas(salasUsuario);
+                
+                if (salasUsuario.length > 0) {
+                    setSalaActual(salasUsuario[0].id);
+                }
+            }, [usuario.id]);
+
+            useEffect(() => {
+                if (ideas.length > 0) {
+                    DataManager.guardarIdeasUsuario(usuario.id, ideas);
+                }
+            }, [ideas, usuario.id]);
+
+            useEffect(() => {
+                if (salas.length > 0) {
+                    DataManager.guardarSalasUsuario(usuario.id, salas);
+                }
+            }, [salas, usuario.id]);
+
+            // Auto-actualizar estados
+            useEffect(() => {
+                const interval = setInterval(() => {
+                    setIdeas(prevIdeas => prevIdeas.map(actualizarEstadoIdea));
+                }, 60000);
+                return () => clearInterval(interval);
+            }, []);
+
+            function limpiarIdeasRechazadas(ideas) {
+                const ahora = Date.now();
+                const limiteMs = DIAS_AUTO_ELIMINAR * 24 * 60 * 60 * 1000;
+                
+                return ideas.filter(idea => {
+                    if (idea.estado === ESTADOS.RECHAZADA) {
+                        const tiempoDesdeRechazo = ahora - (idea.fechaRechazo || idea.creada);
+                        return tiempoDesdeRechazo < limiteMs;
+                    }
+                    return true;
+                });
+            }
+
+            function actualizarEstadoIdea(idea) {
+                const ahora = Date.now();
+                const tiempoTranscurrido = ahora - idea.creada;
+                const limiteMs = idea.duracion * 60 * 60 * 1000;
+
+                if (idea.estado === ESTADOS.INCUBANDO) {
+                    if (tiempoTranscurrido >= limiteMs) {
+                        if (idea.reacciones.length === 0 && idea.comentarios.length === 0) {
+                            return { ...idea, estado: ESTADOS.MUERTA };
+                        } else {
+                            return { ...idea, estado: ESTADOS.ACTIVA };
+                        }
+                    }
+                }
+                return idea;
+            }
+
+            function crearSala(nombre, color) {
+                const nuevaSala = {
+                    id: Date.now().toString(),
+                    nombre,
+                    color
+                };
+                setSalas([...salas, nuevaSala]);
+                setMostrarNuevaSala(false);
+            }
+
+            function eliminarSala(salaId) {
+                if (confirm('¿Estás seguro de eliminar esta sala? Las ideas se moverán a la primera sala disponible.')) {
+                    // Mover ideas a la primera sala
+                    const primeraOtraSala = salas.find(s => s.id !== salaId);
+                    if (primeraOtraSala) {
+                        setIdeas(ideas.map(idea => 
+                            idea.sala === salaId ? { ...idea, sala: primeraOtraSala.id } : idea
+                        ));
+                        setSalaActual(primeraOtraSala.id);
+                    }
+                    setSalas(salas.filter(s => s.id !== salaId));
+                }
+            }
+
+            function exportarDatos() {
+                const datos = DataManager.exportarDatos(usuario.id);
+                const blob = new Blob([JSON.stringify(datos, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `crea-backup-${new Date().toISOString().split('T')[0]}.json`;
+                a.click();
+            }
+
+            function importarDatos(e) {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        try {
+                            const datos = JSON.parse(event.target.result);
+                            DataManager.importarDatos(usuario.id, datos);
+                            setIdeas(datos.ideas || []);
+                            setSalas(datos.salas || []);
+                            alert('Datos importados correctamente');
+                        } catch (err) {
+                            alert('Error al importar datos');
+                        }
+                    };
+                    reader.readAsText(file);
+                }
+            }
+
+            const ideasFiltradas = ideas.filter(idea => {
+                // Filtro por sala
+                if (vistaActual !== 'aprobadas' && vistaActual !== 'rechazadas') {
+                    if (idea.sala !== salaActual) return false;
+                }
+                
+                // Filtro por estado
+                if (vistaActual === 'incubando') return idea.estado === ESTADOS.INCUBANDO;
+                if (vistaActual === 'activas') return idea.estado === ESTADOS.ACTIVA;
+                if (vistaActual === 'aprobadas') return idea.estado === ESTADOS.APROBADA;
+                if (vistaActual === 'rechazadas') return idea.estado === ESTADOS.RECHAZADA;
+                
+                // 'todas' muestra todo excepto aprobadas y rechazadas
+                return idea.estado !== ESTADOS.APROBADA && idea.estado !== ESTADOS.RECHAZADA;
+            });
+
+            const salaActiva = salas.find(s => s.id === salaActual);
+
+            return (
+                <div className="min-h-screen bg-gray-50 flex">
+                    {/* Sidebar */}
+                    {mostrarSidebar && (
+                        <div className="w-64 bg-white shadow-lg slide-in flex flex-col">
+                            <div className="p-6 gradient-bg text-white">
+                                <h2 className="text-xl font-bold mb-1">✨ Crea</h2>
+                                <p className="text-sm text-purple-100">{usuario.nombre}</p>
+                            </div>
+
+                            <div className="flex-1 overflow-y-auto p-4">
+                                <div className="mb-6">
+                                    <h3 className="text-xs font-semibold text-gray-500 uppercase mb-2">Archivo</h3>
+                                    <button
+                                        onClick={() => setVistaActual('aprobadas')}
+                                        className={`w-full text-left px-3 py-2 rounded-lg mb-1 transition-colors ${
+                                            vistaActual === 'aprobadas' 
+                                                ? 'bg-green-100 text-green-700 font-semibold' 
+                                                : 'text-gray-700 hover:bg-gray-100'
+                                        }`}
+                                    >
+                                        ✓ Ideas Aprobadas ({ideas.filter(i => i.estado === ESTADOS.APROBADA).length})
+                                    </button>
+                                    <button
+                                        onClick={() => setVistaActual('rechazadas')}
+                                        className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${
+                                            vistaActual === 'rechazadas' 
+                                                ? 'bg-red-100 text-red-700 font-semibold' 
+                                                : 'text-gray-700 hover:bg-gray-100'
+                                        }`}
+                                    >
+                                        ✗ Ideas Rechazadas ({ideas.filter(i => i.estado === ESTADOS.RECHAZADA).length})
+                                    </button>
+                                </div>
+
+                                <div className="mb-6">
+                                    <div className="flex justify-between items-center mb-2">
+                                        <h3 className="text-xs font-semibold text-gray-500 uppercase">Salas</h3>
+                                        <button
+                                            onClick={() => setMostrarNuevaSala(true)}
+                                            className="text-purple-600 hover:text-purple-700"
+                                        >
+                                            +
+                                        </button>
+                                    </div>
+                                    {salas.map(sala => (
+                                        <div key={sala.id} className="flex items-center mb-1">
+                                            <button
+                                                onClick={() => {
+                                                    setSalaActual(sala.id);
+                                                    setVistaActual('todas');
+                                                }}
+                                                className={`flex-1 text-left px-3 py-2 rounded-lg transition-colors ${
+                                                    salaActual === sala.id && vistaActual !== 'aprobadas' && vistaActual !== 'rechazadas'
+                                                        ? `bg-${sala.color}-100 text-${sala.color}-700 font-semibold` 
+                                                        : 'text-gray-700 hover:bg-gray-100'
+                                                }`}
+                                            >
+                                                🗂️ {sala.nombre}
+                                            </button>
+                                            {salas.length > 1 && (
+                                                <button
+                                                    onClick={() => eliminarSala(sala.id)}
+                                                    className="text-red-500 hover:text-red-700 px-2"
+                                                >
+                                                    ×
+                                                </button>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <div className="mb-6">
+                                    <h3 className="text-xs font-semibold text-gray-500 uppercase mb-2">Datos</h3>
+                                    <button
+                                        onClick={exportarDatos}
+                                        className="w-full text-left px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-100 mb-1 text-sm"
+                                    >
+                                        📥 Exportar backup
+                                    </button>
+                                    <label className="w-full block">
+                                        <span className="w-full text-left px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-100 cursor-pointer block text-sm">
+                                            📤 Importar backup
+                                        </span>
+                                        <input
+                                            type="file"
+                                            accept=".json"
+                                            onChange={importarDatos}
+                                            className="hidden"
+                                        />
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div className="p-4 border-t">
+                                <button
+                                    onClick={onLogout}
+                                    className="w-full px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors font-medium"
+                                >
+                                    Cerrar Sesión
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Contenido principal */}
+                    <div className="flex-1">
+                        <AppContenido
+                            usuario={usuario}
+                            ideas={ideasFiltradas}
+                            setIdeas={setIdeas}
+                            todasLasIdeas={ideas}
+                            vistaActual={vistaActual}
+                            setVistaActual={setVistaActual}
+                            salaActual={salaActual}
+                            salaActiva={salaActiva}
+                            mostrarSidebar={mostrarSidebar}
+                            setMostrarSidebar={setMostrarSidebar}
+                        />
+                    </div>
+
+                    {/* Modal Nueva Sala */}
+                    {mostrarNuevaSala && (
+                        <ModalNuevaSala
+                            onCrear={crearSala}
+                            onCerrar={() => setMostrarNuevaSala(false)}
+                        />
+                    )}
+                </div>
+            );
+        }
+
+        function ModalNuevaSala({ onCrear, onCerrar }) {
+            const [nombre, setNombre] = useState('');
+            const [color, setColor] = useState('blue');
+            
+            const colores = ['blue', 'green', 'purple', 'red', 'yellow', 'pink', 'indigo', 'orange'];
+
+            function handleSubmit(e) {
+                e.preventDefault();
+                if (nombre.trim()) {
+                    onCrear(nombre.trim(), color);
+                }
+            }
+
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <div className="bg-white rounded-xl p-6 w-full max-w-md fade-in">
+                        <h2 className="text-xl font-bold mb-4">Nueva Sala</h2>
+                        <form onSubmit={handleSubmit}>
+                            <div className="mb-4">
+                                <label className="block text-gray-700 text-sm font-semibold mb-2">
+                                    Nombre de la sala
+                                </label>
+                                <input
+                                    type="text"
+                                    value={nombre}
+                                    onChange={(e) => setNombre(e.target.value)}
+                                    className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none"
+                                    placeholder="Ej: Marketing, Desarrollo..."
+                                    required
+                                />
+                            </div>
+
+                            <div className="mb-6">
+                                <label className="block text-gray-700 text-sm font-semibold mb-2">
+                                    Color
+                                </label>
+                                <div className="flex flex-wrap gap-2">
+                                    {colores.map(c => (
+                                        <button
+                                            key={c}
+                                            type="button"
+                                            onClick={() => setColor(c)}
+                                            className={`w-8 h-8 rounded-full bg-${c}-500 ${
+                                                color === c ? 'ring-4 ring-gray-300' : ''
+                                            }`}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="flex gap-3">
+                                <button
+                                    type="button"
+                                    onClick={onCerrar}
+                                    className="flex-1 px-4 py-2 border-2 border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                                >
+                                    Crear
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            );
+        }
+
+        function AppContenido({ 
+            usuario, 
+            ideas, 
+            setIdeas, 
+            todasLasIdeas,
+            vistaActual, 
+            setVistaActual, 
+            salaActual,
+            salaActiva,
+            mostrarSidebar,
+            setMostrarSidebar
+        }) {
+            const [nuevaIdea, setNuevaIdea] = useState('');
+            const [duracionHoras, setDuracionHoras] = useState(24);
+            const [ideaExpandida, setIdeaExpandida] = useState(null);
+
+            function crearIdea() {
+                if (nuevaIdea.trim().length === 0) return;
+
+                const idea = {
+                    id: Date.now(),
+                    texto: nuevaIdea.trim(),
+                    creada: Date.now(),
+                    duracion: duracionHoras,
+                    estado: ESTADOS.INCUBANDO,
+                    sala: salaActual,
+                    reacciones: [],
+                    comentarios: [],
+                    esCreador: true
+                };
+
+                setIdeas([idea, ...todasLasIdeas]);
+                setNuevaIdea('');
+            }
+
+            function agregarReaccion(ideaId, emoji) {
+                setIdeas(todasLasIdeas.map(idea => {
+                    if (idea.id === ideaId) {
+                        // Verificar si el usuario ya reaccionó a esta idea
+                        if (!idea.reaccionesUsuarios) {
+                            idea.reaccionesUsuarios = {};
+                        }
+                        
+                        const reaccionAnterior = idea.reaccionesUsuarios[usuario.id];
+                        
+                        // Si ya reaccionó con el mismo emoji, no hacer nada
+                        if (reaccionAnterior === emoji) {
+                            return idea;
+                        }
+                        
+                        // Si ya reaccionó con otro emoji, quitarlo primero
+                        let nuevasReacciones = [...idea.reacciones];
+                        if (reaccionAnterior) {
+                            nuevasReacciones = nuevasReacciones.map(r => {
+                                if (r.emoji === reaccionAnterior) {
+                                    return r.count > 1 ? { ...r, count: r.count - 1 } : null;
+                                }
+                                return r;
+                            }).filter(r => r !== null);
+                        }
+                        
+                        // Agregar la nueva reacción
+                        const reaccionExistente = nuevasReacciones.find(r => r.emoji === emoji);
+                        if (reaccionExistente) {
+                            nuevasReacciones = nuevasReacciones.map(r =>
+                                r.emoji === emoji ? { ...r, count: r.count + 1 } : r
+                            );
+                        } else {
+                            nuevasReacciones = [...nuevasReacciones, { emoji, count: 1 }];
+                        }
+                        
+                        return {
+                            ...idea,
+                            reacciones: nuevasReacciones,
+                            reaccionesUsuarios: {
+                                ...idea.reaccionesUsuarios,
+                                [usuario.id]: emoji
+                            }
+                        };
+                    }
+                    return idea;
+                }));
+            }
+
+            function agregarComentario(ideaId, texto, esPropuesta = false) {
+                if (texto.trim().length === 0) return;
+
+                const comentario = {
+                    id: Date.now(),
+                    texto: texto.trim(),
+                    timestamp: Date.now(),
+                    esPropuesta,
+                    estado: esPropuesta ? 'pendiente' : null
+                };
+
+                setIdeas(todasLasIdeas.map(idea => {
+                    if (idea.id === ideaId) {
+                        return {
+                            ...idea,
+                            comentarios: [...idea.comentarios, comentario]
+                        };
+                    }
+                    return idea;
+                }));
+            }
+
+            function gestionarPropuesta(ideaId, comentarioId, accion) {
+                setIdeas(todasLasIdeas.map(idea => {
+                    if (idea.id === ideaId) {
+                        return {
+                            ...idea,
+                            comentarios: idea.comentarios.map(c =>
+                                c.id === comentarioId ? { ...c, estado: accion } : c
+                            )
+                        };
+                    }
+                    return idea;
+                }));
+            }
+
+            function aprobarIdea(ideaId) {
+                setIdeas(todasLasIdeas.map(idea =>
+                    idea.id === ideaId 
+                        ? { ...idea, estado: ESTADOS.APROBADA, fechaAprobacion: Date.now() }
+                        : idea
+                ));
+            }
+
+            function rechazarIdea(ideaId) {
+                setIdeas(todasLasIdeas.map(idea =>
+                    idea.id === ideaId 
+                        ? { ...idea, estado: ESTADOS.RECHAZADA, fechaRechazo: Date.now() }
+                        : idea
+                ));
+            }
+
+            function eliminarIdea(ideaId) {
+                if (confirm('¿Estás seguro de eliminar esta idea permanentemente?')) {
+                    setIdeas(todasLasIdeas.filter(idea => idea.id !== ideaId));
+                }
+            }
+
+            function calcularTiempoRestante(idea) {
+                const ahora = Date.now();
+                const tiempoTranscurrido = ahora - idea.creada;
+                const limiteMs = idea.duracion * 60 * 60 * 1000;
+                const restante = limiteMs - tiempoTranscurrido;
+
+                if (restante <= 0) return 'Tiempo agotado';
+
+                const horas = Math.floor(restante / (60 * 60 * 1000));
+                const minutos = Math.floor((restante % (60 * 60 * 1000)) / (60 * 1000));
+
+                if (horas > 0) return `${horas}h ${minutos}m`;
+                return `${minutos}m`;
+            }
+
+            function calcularDiasParaEliminar(idea) {
+                if (idea.estado !== ESTADOS.RECHAZADA) return null;
+                
+                const ahora = Date.now();
+                const fechaRechazo = idea.fechaRechazo || idea.creada;
+                const tiempoTranscurrido = ahora - fechaRechazo;
+                const limiteMs = DIAS_AUTO_ELIMINAR * 24 * 60 * 60 * 1000;
+                const restante = limiteMs - tiempoTranscurrido;
+                
+                const diasRestantes = Math.ceil(restante / (24 * 60 * 60 * 1000));
+                return diasRestantes;
+            }
+
+            const reaccionesDisponibles = ['💡', '🔥', '❤️', '👍', '🤔', '⭐', '🚀', '💭'];
+
+            const tituloVista = vistaActual === 'aprobadas' ? 'Ideas Aprobadas' :
+                                vistaActual === 'rechazadas' ? 'Ideas Rechazadas' :
+                                salaActiva ? salaActiva.nombre : 'Ideas';
+
+            return (
+                <div className="flex-1">
+                    <header className="bg-white shadow-sm py-4 px-6">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                                <button
+                                    onClick={() => setMostrarSidebar(!mostrarSidebar)}
+                                    className="text-gray-600 hover:text-gray-800"
+                                >
+                                    ☰
+                                </button>
+                                <h1 className="text-2xl font-bold text-gray-800">{tituloVista}</h1>
+                            </div>
+                        </div>
+                    </header>
+
+                    <div className="max-w-4xl mx-auto px-4 py-8">
+                        {/* Formulario nueva idea - solo en salas */}
+                        {vistaActual !== 'aprobadas' && vistaActual !== 'rechazadas' && (
+                            <div className="bg-white rounded-2xl shadow-lg p-6 mb-8 fade-in">
+                                <h2 className="text-xl font-semibold mb-4 text-gray-800">💭 Comparte tu idea</h2>
+                                <textarea
+                                    value={nuevaIdea}
+                                    onChange={(e) => setNuevaIdea(e.target.value.slice(0, CHAR_LIMIT))}
+                                    placeholder="Escribe tu premisa o idea de forma concisa..."
+                                    className="w-full p-4 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none resize-none"
+                                    rows="3"
+                                />
+                                <div className="flex justify-between items-center mt-3">
+                                    <div className="flex items-center gap-4">
+                                        <select
+                                            value={duracionHoras}
+                                            onChange={(e) => setDuracionHoras(Number(e.target.value))}
+                                            className="px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none"
+                                        >
+                                            <option value={24}>24 horas</option>
+                                            <option value={48}>48 horas</option>
+                                            <option value={72}>72 horas</option>
+                                        </select>
+                                        <span className="text-sm text-gray-500">
+                                            {nuevaIdea.length}/{CHAR_LIMIT}
+                                        </span>
+                                    </div>
+                                    <button
+                                        onClick={crearIdea}
+                                        disabled={nuevaIdea.trim().length === 0}
+                                        className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-medium"
+                                    >
+                                        Publicar Idea
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Filtros - solo en salas */}
+                        {vistaActual !== 'aprobadas' && vistaActual !== 'rechazadas' && (
+                            <div className="flex gap-3 mb-6">
+                                <button
+                                    onClick={() => setVistaActual('todas')}
+                                    className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                                        vistaActual === 'todas'
+                                            ? 'bg-purple-600 text-white'
+                                            : 'bg-white text-gray-700 hover:bg-gray-100'
+                                    }`}
+                                >
+                                    Todas ({ideas.length})
+                                </button>
+                                <button
+                                    onClick={() => setVistaActual('incubando')}
+                                    className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                                        vistaActual === 'incubando'
+                                            ? 'bg-purple-600 text-white'
+                                            : 'bg-white text-gray-700 hover:bg-gray-100'
+                                    }`}
+                                >
+                                    🥚 Incubando ({ideas.filter(i => i.estado === ESTADOS.INCUBANDO).length})
+                                </button>
+                                <button
+                                    onClick={() => setVistaActual('activas')}
+                                    className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                                        vistaActual === 'activas'
+                                            ? 'bg-purple-600 text-white'
+                                            : 'bg-white text-gray-700 hover:bg-gray-100'
+                                    }`}
+                                >
+                                    ⚡ Activas ({ideas.filter(i => i.estado === ESTADOS.ACTIVA).length})
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Lista de ideas */}
+                        <div className="space-y-4">
+                            {ideas.length === 0 ? (
+                                <div className="text-center py-12 text-gray-400">
+                                    <div className="text-6xl mb-4">💭</div>
+                                    <p>No hay ideas todavía.</p>
+                                </div>
+                            ) : (
+                                ideas.map(idea => (
+                                    <IdeaCard
+                                        key={idea.id}
+                                        idea={idea}
+                                        expandida={ideaExpandida === idea.id}
+                                        onExpandir={() => setIdeaExpandida(ideaExpandida === idea.id ? null : idea.id)}
+                                        onReaccionar={agregarReaccion}
+                                        onComentar={agregarComentario}
+                                        onGestionarPropuesta={gestionarPropuesta}
+                                        onAprobar={aprobarIdea}
+                                        onRechazar={rechazarIdea}
+                                        onEliminar={eliminarIdea}
+                                        tiempoRestante={calcularTiempoRestante(idea)}
+                                        diasParaEliminar={calcularDiasParaEliminar(idea)}
+                                        reaccionesDisponibles={reaccionesDisponibles}
+                                    />
+                                ))
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        function IdeaCard({ 
+            idea, 
+            expandida, 
+            onExpandir, 
+            onReaccionar, 
+            onComentar, 
+            onGestionarPropuesta,
+            onAprobar,
+            onRechazar,
+            onEliminar,
+            tiempoRestante,
+            diasParaEliminar,
+            reaccionesDisponibles 
+        }) {
+            const [nuevoComentario, setNuevoComentario] = useState('');
+            const [esPropuesta, setEsPropuesta] = useState(false);
+            const [mostrarReacciones, setMostrarReacciones] = useState(false);
+
+            function enviarComentario() {
+                if (nuevoComentario.trim()) {
+                    onComentar(idea.id, nuevoComentario, esPropuesta);
+                    setNuevoComentario('');
+                    setEsPropuesta(false);
+                }
+            }
+
+            const estadoConfig = {
+                [ESTADOS.INCUBANDO]: { color: 'bg-yellow-100 text-yellow-800', icon: '🥚', label: 'Incubando' },
+                [ESTADOS.ACTIVA]: { color: 'bg-green-100 text-green-800', icon: '⚡', label: 'Activa' },
+                [ESTADOS.MUERTA]: { color: 'bg-gray-100 text-gray-800', icon: '💀', label: 'Expirada' },
+                [ESTADOS.APROBADA]: { color: 'bg-blue-100 text-blue-800', icon: '✓', label: 'Aprobada' },
+                [ESTADOS.RECHAZADA]: { color: 'bg-red-100 text-red-800', icon: '✗', label: 'Rechazada' }
+            };
+
+            const config = estadoConfig[idea.estado];
+
+            return (
+                <div className={`bg-white rounded-xl shadow-md hover:shadow-lg transition-shadow overflow-hidden fade-in ${
+                    idea.estado === ESTADOS.MUERTA || idea.estado === ESTADOS.RECHAZADA ? 'opacity-60' : ''
+                }`}>
+                    <div className="p-6">
+                        <div className="flex justify-between items-start mb-4">
+                            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${config.color}`}>
+                                {config.icon} {config.label}
+                            </span>
+                            <div className="flex items-center gap-2">
+                                {idea.estado === ESTADOS.INCUBANDO && (
+                                    <span className="text-sm text-gray-500 font-medium">
+                                        ⏱️ {tiempoRestante}
+                                    </span>
+                                )}
+                                {idea.estado === ESTADOS.RECHAZADA && diasParaEliminar !== null && (
+                                    <span className="text-sm text-red-500 font-medium">
+                                        🗑️ Se eliminará en {diasParaEliminar} días
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+
+                        <p className="text-lg text-gray-800 mb-4 leading-relaxed">{idea.texto}</p>
+
+                        {/* Acciones de aprobar/rechazar */}
+                        {idea.esCreador && 
+                         idea.estado !== ESTADOS.APROBADA && 
+                         idea.estado !== ESTADOS.RECHAZADA && 
+                         idea.estado !== ESTADOS.INCUBANDO && (
+                            <div className="flex gap-2 mb-4">
+                                <button
+                                    onClick={() => onAprobar(idea.id)}
+                                    className="px-4 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors font-medium text-sm"
+                                >
+                                    ✓ Aprobar Idea
+                                </button>
+                                <button
+                                    onClick={() => onRechazar(idea.id)}
+                                    className="px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors font-medium text-sm"
+                                >
+                                    ✗ Rechazar Idea
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Botón eliminar para ideas rechazadas */}
+                        {idea.estado === ESTADOS.RECHAZADA && (
+                            <button
+                                onClick={() => onEliminar(idea.id)}
+                                className="mb-4 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-medium text-sm"
+                            >
+                                🗑️ Eliminar ahora
+                            </button>
+                        )}
+
+                        {/* Reacciones */}
+                        <div className="flex flex-wrap gap-2 mb-4">
+                            {idea.reacciones.map(r => (
+                                <button
+                                    key={r.emoji}
+                                    onClick={() => onReaccionar(idea.id, r.emoji)}
+                                    className="px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded-full text-sm transition-colors"
+                                >
+                                    {r.emoji} {r.count}
+                                </button>
+                            ))}
+                            {idea.estado !== ESTADOS.MUERTA && idea.estado !== ESTADOS.RECHAZADA && (
+                                <div className="relative">
+                                    <button
+                                        onClick={() => setMostrarReacciones(!mostrarReacciones)}
+                                        className="px-3 py-1 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-full text-sm transition-colors"
+                                    >
+                                        + Reaccionar
+                                    </button>
+                                    {mostrarReacciones && (
+                                        <div className="absolute top-full mt-2 bg-white shadow-lg rounded-lg p-2 flex gap-1 z-10 border-2 border-purple-200">
+                                            {reaccionesDisponibles.map(emoji => (
+                                                <button
+                                                    key={emoji}
+                                                    onClick={() => {
+                                                        onReaccionar(idea.id, emoji);
+                                                        setMostrarReacciones(false);
+                                                    }}
+                                                    className="text-2xl hover:scale-125 transition-transform p-1"
+                                                >
+                                                    {emoji}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
+                        <button
+                            onClick={onExpandir}
+                            className="text-purple-600 hover:text-purple-700 font-medium text-sm"
+                        >
+                            {expandida ? '▼ Ocultar' : `▶ Ver comentarios (${idea.comentarios.length})`}
+                        </button>
+
+                        {expandida && (
+                            <div className="mt-4 space-y-3 border-t pt-4">
+                                {idea.comentarios.map(comentario => (
+                                    <div key={comentario.id} className="bg-gray-50 rounded-lg p-3">
+                                        <div className="flex justify-between items-start mb-1">
+                                            <span className="text-xs text-gray-500">
+                                                {new Date(comentario.timestamp).toLocaleString('es', {
+                                                    month: 'short',
+                                                    day: 'numeric',
+                                                    hour: '2-digit',
+                                                    minute: '2-digit'
+                                                })}
+                                            </span>
+                                            {comentario.esPropuesta && (
+                                                <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
+                                                    💡 Propuesta
+                                                </span>
+                                            )}
+                                        </div>
+                                        <p className="text-gray-700">{comentario.texto}</p>
+                                        {idea.esCreador && comentario.esPropuesta && comentario.estado === 'pendiente' && (
+                                            <div className="flex gap-2 mt-2">
+                                                <button
+                                                    onClick={() => onGestionarPropuesta(idea.id, comentario.id, 'aceptada')}
+                                                    className="text-xs px-3 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200"
+                                                >
+                                                    ✓ Aceptar
+                                                </button>
+                                                <button
+                                                    onClick={() => onGestionarPropuesta(idea.id, comentario.id, 'rechazada')}
+                                                    className="text-xs px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200"
+                                                >
+                                                    ✗ Rechazar
+                                                </button>
+                                            </div>
+                                        )}
+                                        {comentario.estado === 'aceptada' && (
+                                            <span className="text-xs text-green-600 mt-1 block">✓ Aceptada</span>
+                                        )}
+                                        {comentario.estado === 'rechazada' && (
+                                            <span className="text-xs text-red-600 mt-1 block">✗ Rechazada</span>
+                                        )}
+                                    </div>
+                                ))}
+
+                                {idea.estado !== ESTADOS.MUERTA && idea.estado !== ESTADOS.RECHAZADA && (
+                                    <div className="bg-purple-50 rounded-lg p-3">
+                                        <textarea
+                                            value={nuevoComentario}
+                                            onChange={(e) => setNuevoComentario(e.target.value.slice(0, COMMENT_LIMIT))}
+                                            placeholder="Agrega tu comentario o propuesta..."
+                                            className="w-full p-2 border border-purple-200 rounded-lg focus:border-purple-500 focus:outline-none resize-none text-sm"
+                                            rows="2"
+                                        />
+                                        <div className="flex justify-between items-center mt-2">
+                                            <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={esPropuesta}
+                                                    onChange={(e) => setEsPropuesta(e.target.checked)}
+                                                    className="rounded"
+                                                />
+                                                💡 Marcar como propuesta
+                                            </label>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xs text-gray-500">
+                                                    {nuevoComentario.length}/{COMMENT_LIMIT}
+                                                </span>
+                                                <button
+                                                    onClick={enviarComentario}
+                                                    disabled={nuevoComentario.trim().length === 0}
+                                                    className="px-3 py-1 bg-purple-600 text-white rounded text-sm hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                                                >
+                                                    Enviar
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('app'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
