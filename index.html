@@ -1,0 +1,1252 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crea - Brainstorming Colaborativo</title>
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
+    
+    <!-- React -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <style>
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .fade-in {
+            animation: fadeIn 0.5s ease-out;
+        }
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        @keyframes slideIn {
+            from { transform: translateX(-100%); }
+            to { transform: translateX(0); }
+        }
+        .slide-in {
+            animation: slideIn 0.3s ease-out;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div id="app"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // ============================================================
+        // CONFIGURACIÓN DE FIREBASE
+        // ============================================================
+        // 🔴 IMPORTANTE: Reemplaza esto con tu configuración de Firebase
+        // Ve a: https://console.firebase.google.com/
+        // Crea un proyecto > Agrega una app web > Copia la configuración aquí
+        const firebaseConfig = {
+            apiKey: "AIzaSyCuhj_Is632JMLxPWEMvo-v7g3IRoskXKo",
+            authDomain: "creaweb-2778f.firebaseapp.com",
+            projectId: "creaweb-2778f",
+            storageBucket: "creaweb-2778f.firebasestorage.app",
+            messagingSenderId: "15872758133",
+            appId: "1:15872758133:web:a5b1d0a789705615181833c"
+        };
+
+        // Inicializar Firebase
+        let firebaseInitialized = false;
+        try {
+            if (!firebase.apps.length) {
+                firebase.initializeApp(firebaseConfig);
+                firebaseInitialized = true;
+                console.log('✅ Firebase inicializado correctamente');
+            }
+        } catch (error) {
+            console.error('❌ Error al inicializar Firebase:', error);
+            console.log('💡 Asegúrate de configurar firebaseConfig con tus credenciales');
+        }
+
+        const auth = firebaseInitialized ? firebase.auth() : null;
+        const db = firebaseInitialized ? firebase.firestore() : null;
+        const storage = firebaseInitialized ? firebase.storage() : null;
+
+        const CHAR_LIMIT = 180;
+        const COMMENT_LIMIT = 120;
+
+        const ESTADOS = {
+            INCUBANDO: 'incubando',
+            ACTIVA: 'activa',
+            MUERTA: 'muerta',
+            APROBADA: 'aprobada',
+            RECHAZADA: 'rechazada'
+        };
+
+        const ROLES = {
+            OWNER: 'owner',      // Creador, control total
+            ADMIN: 'admin',      // Puede administrar sala
+            EDITOR: 'editor',    // Puede crear y editar ideas
+            VIEWER: 'viewer'     // Solo puede ver y comentar
+        };
+
+        const DESAFIOS = [
+            {
+                titulo: "Currículum Absurdo",
+                descripcion: "Agrega una línea absurda a tu currículum.",
+                ejemplo: "Líder espiritual de una secta de freelancers con burnout",
+                instrucciones: "No lo pienses mucho. Escribe rápido y sin filtro. Mientras más ridículo, mejor."
+            },
+            {
+                titulo: "Agrega la Premisa",
+                descripcion: "Te damos un remate. Tu reto: agrégale una premisa.",
+                ejemplo: "Frase inicial: 'Salí jodido y con las rodillas raspadas'",
+                instrucciones: "Piensa fuera del ambiente laboral."
+            },
+            {
+                titulo: "Animal Imposible",
+                descripcion: "¿Qué animal no quisieras ser por un día? Explica por qué.",
+                ejemplo: "",
+                instrucciones: "Piensa en animales raros que tal vez no conozcas."
+            },
+            {
+                titulo: "Objeto Quejumbroso",
+                descripcion: "Escribe un monólogo interno de un objeto quejándose de su trabajo.",
+                ejemplo: "Soy una licuadora. Me despiertan solo para destruir frutas. Ya no tengo sentido de identidad.",
+                instrucciones: ""
+            },
+            {
+                titulo: "Excusa Creativa",
+                descripcion: "Te damos una situación real. Tú inventas una excusa graciosa para ella.",
+                ejemplo: "Situación: Llegaste tarde al trabajo. ¿Cuál es tu excusa?",
+                instrucciones: "Trata de que sea irreal, pero verosímil."
+            },
+            {
+                titulo: "Ducha Épica",
+                descripcion: "Imagina que eres un personaje exagerado hablando solo en la ducha.",
+                ejemplo: "Soy el Capitán Shampoo, defensor de los cueros cabelludos olvidados.",
+                instrucciones: ""
+            },
+            {
+                titulo: "Perfume Absurdo",
+                descripcion: "Inventa un perfume absurdo que se volvería popular en tu ciudad.",
+                ejemplo: "",
+                instrucciones: ""
+            },
+            {
+                titulo: "Día sin Electricidad",
+                descripcion: "¿Cómo sobrevivirías un día sin electricidad?",
+                ejemplo: "",
+                instrucciones: "Describe en no más de 500 palabras cómo sería tu día sin morirte de hambre ni tener crisis de ansiedad."
+            },
+            {
+                titulo: "Pelea con tu IA",
+                descripcion: "Tu IA está harta de ti. Tienen una pelea.",
+                ejemplo: "",
+                instrucciones: "Desarrolla el diálogo entre ambos."
+            },
+            {
+                titulo: "Carta de Amor con Twist",
+                descripcion: "Escribe una mini carta de amor muy sentimental que tenga un chiste inesperado.",
+                ejemplo: "",
+                instrucciones: ""
+            }
+        ];
+
+        // ============================================================
+        // COMPONENTE PRINCIPAL
+        // ============================================================
+        function App() {
+            const [usuario, setUsuario] = useState(null);
+            const [cargando, setCargando] = useState(true);
+
+            useEffect(() => {
+                if (!auth) {
+                    setCargando(false);
+                    return;
+                }
+
+                const unsubscribe = auth.onAuthStateChanged((user) => {
+                    setUsuario(user);
+                    setCargando(false);
+                });
+
+                return () => unsubscribe();
+            }, []);
+
+            if (!firebaseInitialized) {
+                return <ErrorConfiguracion />;
+            }
+
+            if (cargando) {
+                return <PantallaCarga />;
+            }
+
+            if (!usuario) {
+                return <PantallaAuth />;
+            }
+
+            return <AppPrincipal usuario={usuario} />;
+        }
+
+        // ============================================================
+        // PANTALLAS DE ERROR Y CARGA
+        // ============================================================
+        function ErrorConfiguracion() {
+            return (
+                <div className="min-h-screen gradient-bg flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-2xl">
+                        <div className="text-center mb-6">
+                            <div className="text-6xl mb-4">⚙️</div>
+                            <h1 className="text-3xl font-bold text-red-600 mb-2">Configuración Requerida</h1>
+                            <p className="text-gray-600">Firebase no está configurado correctamente</p>
+                        </div>
+
+                        <div className="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-4 mb-6">
+                            <h3 className="font-semibold text-yellow-800 mb-2">📋 Pasos para configurar:</h3>
+                            <ol className="text-sm text-yellow-700 space-y-2 list-decimal list-inside">
+                                <li>Ve a <a href="https://console.firebase.google.com/" target="_blank" className="underline">Firebase Console</a></li>
+                                <li>Crea un nuevo proyecto o usa uno existente</li>
+                                <li>Agrega una aplicación web (ícono &lt;/&gt;)</li>
+                                <li>Copia la configuración de Firebase</li>
+                                <li>Pégala en el objeto <code className="bg-yellow-100 px-1">firebaseConfig</code> en el código</li>
+                                <li>Habilita Authentication (Email/Password) y Firestore en Firebase Console</li>
+                            </ol>
+                        </div>
+
+                        <div className="bg-gray-50 rounded-lg p-4 font-mono text-xs overflow-x-auto">
+                            <pre>{`const firebaseConfig = {
+  apiKey: "TU_API_KEY",
+  authDomain: "tu-proyecto.firebaseapp.com",
+  projectId: "tu-proyecto-id",
+  storageBucket: "tu-proyecto.appspot.com",
+  messagingSenderId: "123456789",
+  appId: "tu-app-id"
+};`}</pre>
+                        </div>
+
+                        <div className="mt-6 text-center">
+                            <button 
+                                onClick={() => window.location.reload()}
+                                className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+                            >
+                                🔄 Recargar después de configurar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        function PantallaCarga() {
+            return (
+                <div className="min-h-screen gradient-bg flex items-center justify-center">
+                    <div className="text-center">
+                        <div className="text-6xl mb-4 animate-bounce">✨</div>
+                        <h2 className="text-2xl font-bold text-white">Cargando Crea...</h2>
+                    </div>
+                </div>
+            );
+        }
+
+        // ============================================================
+        // AUTENTICACIÓN
+        // ============================================================
+        function PantallaAuth() {
+            const [modo, setModo] = useState('login'); // login, registro, recuperar
+            const [email, setEmail] = useState('');
+            const [password, setPassword] = useState('');
+            const [nombre, setNombre] = useState('');
+            const [error, setError] = useState('');
+            const [mensaje, setMensaje] = useState('');
+            const [cargando, setCargando] = useState(false);
+
+            async function handleLogin(e) {
+                e.preventDefault();
+                setError('');
+                setCargando(true);
+
+                try {
+                    await auth.signInWithEmailAndPassword(email, password);
+                } catch (error) {
+                    if (error.code === 'auth/user-not-found') {
+                        setError('No existe una cuenta con este email');
+                    } else if (error.code === 'auth/wrong-password') {
+                        setError('Contraseña incorrecta');
+                    } else {
+                        setError('Error al iniciar sesión: ' + error.message);
+                    }
+                }
+
+                setCargando(false);
+            }
+
+            async function handleRegistro(e) {
+                e.preventDefault();
+                setError('');
+                setCargando(true);
+
+                try {
+                    const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+                    
+                    // Actualizar perfil con nombre
+                    await userCredential.user.updateProfile({
+                        displayName: nombre
+                    });
+
+                    // Crear documento de usuario en Firestore
+                    await db.collection('usuarios').doc(userCredential.user.uid).set({
+                        nombre: nombre,
+                        email: email,
+                        creado: firebase.firestore.FieldValue.serverTimestamp(),
+                        ultimoAcceso: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+
+                    // Crear sala personal por defecto
+                    await db.collection('salas').add({
+                        nombre: 'Mi Sala Personal',
+                        color: 'purple',
+                        creador: userCredential.user.uid,
+                        miembros: {
+                            [userCredential.user.uid]: ROLES.OWNER
+                        },
+                        creada: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+
+                } catch (error) {
+                    if (error.code === 'auth/email-already-in-use') {
+                        setError('Ya existe una cuenta con este email');
+                    } else if (error.code === 'auth/weak-password') {
+                        setError('La contraseña debe tener al menos 6 caracteres');
+                    } else {
+                        setError('Error al crear cuenta: ' + error.message);
+                    }
+                }
+
+                setCargando(false);
+            }
+
+            async function handleRecuperar(e) {
+                e.preventDefault();
+                setError('');
+                setMensaje('');
+                setCargando(true);
+
+                try {
+                    await auth.sendPasswordResetEmail(email);
+                    setMensaje('✅ Email de recuperación enviado. Revisa tu bandeja de entrada.');
+                } catch (error) {
+                    if (error.code === 'auth/user-not-found') {
+                        setError('No existe una cuenta con este email');
+                    } else {
+                        setError('Error: ' + error.message);
+                    }
+                }
+
+                setCargando(false);
+            }
+
+            return (
+                <div className="min-h-screen gradient-bg flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md fade-in">
+                        <div className="text-center mb-8">
+                            <h1 className="text-4xl font-bold text-purple-600 mb-2">✨ Crea</h1>
+                            <p className="text-gray-600">Brainstorming colaborativo</p>
+                        </div>
+
+                        {modo === 'login' && (
+                            <form onSubmit={handleLogin}>
+                                <div className="mb-4">
+                                    <label className="block text-gray-700 text-sm font-semibold mb-2">Email</label>
+                                    <input
+                                        type="email"
+                                        value={email}
+                                        onChange={(e) => setEmail(e.target.value)}
+                                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none"
+                                        required
+                                        placeholder="tu@email.com"
+                                    />
+                                </div>
+
+                                <div className="mb-6">
+                                    <label className="block text-gray-700 text-sm font-semibold mb-2">Contraseña</label>
+                                    <input
+                                        type="password"
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
+                                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none"
+                                        required
+                                        placeholder="••••••••"
+                                    />
+                                </div>
+
+                                {error && <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm">{error}</div>}
+
+                                <button
+                                    type="submit"
+                                    disabled={cargando}
+                                    className="w-full bg-purple-600 text-white py-3 rounded-lg font-semibold hover:bg-purple-700 transition-colors mb-4 disabled:bg-gray-400"
+                                >
+                                    {cargando ? 'Cargando...' : 'Iniciar Sesión'}
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={() => setModo('recuperar')}
+                                    className="w-full text-purple-600 text-sm hover:underline mb-2"
+                                >
+                                    ¿Olvidaste tu contraseña?
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={() => setModo('registro')}
+                                    className="w-full text-gray-600 text-sm hover:underline"
+                                >
+                                    ¿No tienes cuenta? Regístrate
+                                </button>
+                            </form>
+                        )}
+
+                        {modo === 'registro' && (
+                            <form onSubmit={handleRegistro}>
+                                <div className="mb-4">
+                                    <label className="block text-gray-700 text-sm font-semibold mb-2">Nombre</label>
+                                    <input
+                                        type="text"
+                                        value={nombre}
+                                        onChange={(e) => setNombre(e.target.value)}
+                                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none"
+                                        required
+                                        placeholder="Tu nombre"
+                                    />
+                                </div>
+
+                                <div className="mb-4">
+                                    <label className="block text-gray-700 text-sm font-semibold mb-2">Email</label>
+                                    <input
+                                        type="email"
+                                        value={email}
+                                        onChange={(e) => setEmail(e.target.value)}
+                                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none"
+                                        required
+                                        placeholder="tu@email.com"
+                                    />
+                                </div>
+
+                                <div className="mb-6">
+                                    <label className="block text-gray-700 text-sm font-semibold mb-2">Contraseña</label>
+                                    <input
+                                        type="password"
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
+                                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none"
+                                        required
+                                        placeholder="Mínimo 6 caracteres"
+                                    />
+                                </div>
+
+                                {error && <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm">{error}</div>}
+
+                                <button
+                                    type="submit"
+                                    disabled={cargando}
+                                    className="w-full bg-purple-600 text-white py-3 rounded-lg font-semibold hover:bg-purple-700 transition-colors mb-4 disabled:bg-gray-400"
+                                >
+                                    {cargando ? 'Creando cuenta...' : 'Crear Cuenta'}
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={() => setModo('login')}
+                                    className="w-full text-gray-600 text-sm hover:underline"
+                                >
+                                    ¿Ya tienes cuenta? Inicia sesión
+                                </button>
+                            </form>
+                        )}
+
+                        {modo === 'recuperar' && (
+                            <form onSubmit={handleRecuperar}>
+                                <p className="text-sm text-gray-600 mb-4">
+                                    Ingresa tu email y te enviaremos un enlace para restablecer tu contraseña
+                                </p>
+
+                                <div className="mb-6">
+                                    <label className="block text-gray-700 text-sm font-semibold mb-2">Email</label>
+                                    <input
+                                        type="email"
+                                        value={email}
+                                        onChange={(e) => setEmail(e.target.value)}
+                                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none"
+                                        required
+                                        placeholder="tu@email.com"
+                                    />
+                                </div>
+
+                                {error && <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm">{error}</div>}
+                                {mensaje && <div className="mb-4 p-3 bg-green-100 text-green-700 rounded-lg text-sm">{mensaje}</div>}
+
+                                <button
+                                    type="submit"
+                                    disabled={cargando}
+                                    className="w-full bg-purple-600 text-white py-3 rounded-lg font-semibold hover:bg-purple-700 transition-colors mb-4 disabled:bg-gray-400"
+                                >
+                                    {cargando ? 'Enviando...' : 'Enviar Email de Recuperación'}
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={() => setModo('login')}
+                                    className="w-full text-gray-600 text-sm hover:underline"
+                                >
+                                    Volver al login
+                                </button>
+                            </form>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        // ============================================================
+        // APP PRINCIPAL
+        // ============================================================
+        function AppPrincipal({ usuario }) {
+            const [salas, setSalas] = useState([]);
+            const [salaActual, setSalaActual] = useState(null);
+            const [ideas, setIdeas] = useState([]);
+            const [miembros, setMiembros] = useState({});
+            const [mostrarSidebar, setMostrarSidebar] = useState(true);
+            const [mostrarNuevaSala, setMostrarNuevaSala] = useState(false);
+            const [mostrarInvitar, setMostrarInvitar] = useState(false);
+            const [cargando, setCargando] = useState(true);
+
+            // Cargar salas del usuario
+            useEffect(() => {
+                const unsubscribe = db.collection('salas')
+                    .where(`miembros.${usuario.uid}`, 'in', [ROLES.OWNER, ROLES.ADMIN, ROLES.EDITOR, ROLES.VIEWER])
+                    .onSnapshot((snapshot) => {
+                        const salasData = snapshot.docs.map(doc => ({
+                            id: doc.id,
+                            ...doc.data()
+                        }));
+                        setSalas(salasData);
+                        
+                        if (salasData.length > 0 && !salaActual) {
+                            setSalaActual(salasData[0].id);
+                        }
+                        
+                        setCargando(false);
+                    });
+
+                return () => unsubscribe();
+            }, [usuario.uid]);
+
+            // Cargar ideas de la sala actual
+            useEffect(() => {
+                if (!salaActual) return;
+
+                const unsubscribe = db.collection('ideas')
+                    .where('sala', '==', salaActual)
+                    .orderBy('creada', 'desc')
+                    .onSnapshot((snapshot) => {
+                        const ideasData = snapshot.docs.map(doc => ({
+                            id: doc.id,
+                            ...doc.data()
+                        }));
+                        setIdeas(ideasData);
+                    });
+
+                return () => unsubscribe();
+            }, [salaActual]);
+
+            // Cargar info de miembros
+            useEffect(() => {
+                if (!salaActual) return;
+
+                const sala = salas.find(s => s.id === salaActual);
+                if (!sala) return;
+
+                const miembrosIds = Object.keys(sala.miembros || {});
+                
+                const cargarMiembros = async () => {
+                    const miembrosData = {};
+                    for (const uid of miembrosIds) {
+                        const doc = await db.collection('usuarios').doc(uid).get();
+                        if (doc.exists) {
+                            miembrosData[uid] = doc.data();
+                        }
+                    }
+                    setMiembros(miembrosData);
+                };
+
+                cargarMiembros();
+            }, [salaActual, salas]);
+
+            async function crearSala(nombre, color) {
+                try {
+                    await db.collection('salas').add({
+                        nombre,
+                        color,
+                        creador: usuario.uid,
+                        miembros: {
+                            [usuario.uid]: ROLES.OWNER
+                        },
+                        creada: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                    setMostrarNuevaSala(false);
+                } catch (error) {
+                    console.error('Error al crear sala:', error);
+                    alert('Error al crear sala: ' + error.message);
+                }
+            }
+
+            async function cerrarSesion() {
+                try {
+                    await auth.signOut();
+                } catch (error) {
+                    console.error('Error al cerrar sesión:', error);
+                }
+            }
+
+            const salaActiva = salas.find(s => s.id === salaActual);
+            const rolUsuario = salaActiva?.miembros?.[usuario.uid] || ROLES.VIEWER;
+
+            if (cargando) {
+                return <PantallaCarga />;
+            }
+
+            return (
+                <div className="min-h-screen bg-gray-50 flex">
+                    {mostrarSidebar && (
+                        <Sidebar
+                            usuario={usuario}
+                            salas={salas}
+                            salaActual={salaActual}
+                            onCambiarSala={setSalaActual}
+                            onNuevaSala={() => setMostrarNuevaSala(true)}
+                            onCerrarSesion={cerrarSesion}
+                            rolUsuario={rolUsuario}
+                        />
+                    )}
+
+                    <ContenidoPrincipal
+                        usuario={usuario}
+                        salaActual={salaActual}
+                        salaActiva={salaActiva}
+                        ideas={ideas}
+                        miembros={miembros}
+                        rolUsuario={rolUsuario}
+                        mostrarSidebar={mostrarSidebar}
+                        setMostrarSidebar={setMostrarSidebar}
+                        onMostrarInvitar={() => setMostrarInvitar(true)}
+                    />
+
+                    {mostrarNuevaSala && (
+                        <ModalNuevaSala
+                            onCrear={crearSala}
+                            onCerrar={() => setMostrarNuevaSala(false)}
+                        />
+                    )}
+
+                    {mostrarInvitar && salaActiva && (
+                        <ModalInvitar
+                            sala={salaActiva}
+                            miembros={miembros}
+                            onCerrar={() => setMostrarInvitar(false)}
+                        />
+                    )}
+                </div>
+            );
+        }
+
+        // ============================================================
+        // SIDEBAR
+        // ============================================================
+        function Sidebar({ usuario, salas, salaActual, onCambiarSala, onNuevaSala, onCerrarSesion, rolUsuario }) {
+            return (
+                <div className="w-64 bg-white shadow-lg slide-in flex flex-col">
+                    <div className="p-6 gradient-bg text-white">
+                        <h2 className="text-xl font-bold mb-1">✨ Crea</h2>
+                        <p className="text-sm text-purple-100">{usuario.displayName || usuario.email}</p>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto p-4">
+                        <div className="mb-6">
+                            <div className="flex justify-between items-center mb-2">
+                                <h3 className="text-xs font-semibold text-gray-500 uppercase">Mis Salas</h3>
+                                <button
+                                    onClick={onNuevaSala}
+                                    className="text-purple-600 hover:text-purple-700"
+                                >
+                                    +
+                                </button>
+                            </div>
+                            {salas.length === 0 ? (
+                                <p className="text-sm text-gray-500 italic">No tienes salas aún</p>
+                            ) : (
+                                salas.map(sala => (
+                                    <button
+                                        key={sala.id}
+                                        onClick={() => onCambiarSala(sala.id)}
+                                        className={`w-full text-left px-3 py-2 rounded-lg mb-1 transition-colors ${
+                                            salaActual === sala.id
+                                                ? `bg-${sala.color}-100 text-${sala.color}-700 font-semibold` 
+                                                : 'text-gray-700 hover:bg-gray-100'
+                                        }`}
+                                    >
+                                        🗂️ {sala.nombre}
+                                        {sala.miembros && Object.keys(sala.miembros).length > 1 && (
+                                            <span className="ml-2 text-xs text-gray-500">
+                                                ({Object.keys(sala.miembros).length})
+                                            </span>
+                                        )}
+                                    </button>
+                                ))
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="p-4 border-t">
+                        <button
+                            onClick={onCerrarSesion}
+                            className="w-full px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors font-medium"
+                        >
+                            Cerrar Sesión
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+
+        // ============================================================
+        // CONTENIDO PRINCIPAL (simplificado)
+        // ============================================================
+        function ContenidoPrincipal({ usuario, salaActual, salaActiva, ideas, miembros, rolUsuario, mostrarSidebar, setMostrarSidebar, onMostrarInvitar }) {
+            const [nuevaIdea, setNuevaIdea] = useState('');
+            const [duracionHoras, setDuracionHoras] = useState(24);
+            const [mostrarDesafio, setMostrarDesafio] = useState(false);
+            const [desafioActual, setDesafioActual] = useState(null);
+
+            const puedeCrear = [ROLES.OWNER, ROLES.ADMIN, ROLES.EDITOR].includes(rolUsuario);
+
+            function obtenerDesafioAleatorio() {
+                const indiceAleatorio = Math.floor(Math.random() * DESAFIOS.length);
+                setDesafioActual(DESAFIOS[indiceAleatorio]);
+                setMostrarDesafio(true);
+            }
+
+            async function crearIdea() {
+                if (nuevaIdea.trim().length === 0) return;
+                if (!puedeCrear) {
+                    alert('No tienes permisos para crear ideas en esta sala');
+                    return;
+                }
+
+                try {
+                    await db.collection('ideas').add({
+                        texto: nuevaIdea.trim(),
+                        sala: salaActual,
+                        creador: usuario.uid,
+                        creadorNombre: usuario.displayName || usuario.email,
+                        creada: firebase.firestore.FieldValue.serverTimestamp(),
+                        duracion: duracionHoras,
+                        estado: ESTADOS.INCUBANDO,
+                        reacciones: [],
+                        comentarios: [],
+                        adjuntos: { archivos: [], links: [], eventos: [] }
+                    });
+
+                    setNuevaIdea('');
+                } catch (error) {
+                    console.error('Error al crear idea:', error);
+                    alert('Error al crear idea: ' + error.message);
+                }
+            }
+
+            return (
+                <div className="flex-1">
+                    <header className="bg-white shadow-sm py-4 px-6">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                                <button
+                                    onClick={() => setMostrarSidebar(!mostrarSidebar)}
+                                    className="text-gray-600 hover:text-gray-800 text-2xl"
+                                >
+                                    ☰
+                                </button>
+                                <h1 className="text-2xl font-bold text-gray-800">
+                                    {salaActiva?.nombre || 'Crea'}
+                                </h1>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <button
+                                    onClick={obtenerDesafioAleatorio}
+                                    className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors font-medium"
+                                >
+                                    🎲 Desafío
+                                </button>
+                                {[ROLES.OWNER, ROLES.ADMIN].includes(rolUsuario) && (
+                                    <button
+                                        onClick={onMostrarInvitar}
+                                        className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+                                    >
+                                        👥 Invitar
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </header>
+
+                    <div className="max-w-4xl mx-auto px-4 py-8">
+                        {puedeCrear && (
+                            <div className="bg-white rounded-2xl shadow-lg p-6 mb-8 fade-in">
+                                <h2 className="text-xl font-semibold mb-4 text-gray-800">💭 Comparte tu idea</h2>
+                                <textarea
+                                    value={nuevaIdea}
+                                    onChange={(e) => setNuevaIdea(e.target.value.slice(0, CHAR_LIMIT))}
+                                    placeholder="Escribe tu premisa o idea de forma concisa..."
+                                    className="w-full p-4 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none resize-none"
+                                    rows="3"
+                                />
+                                <div className="flex justify-between items-center mt-3">
+                                    <div className="flex items-center gap-4">
+                                        <select
+                                            value={duracionHoras}
+                                            onChange={(e) => setDuracionHoras(Number(e.target.value))}
+                                            className="px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none"
+                                        >
+                                            <option value={24}>24 horas</option>
+                                            <option value={48}>48 horas</option>
+                                            <option value={72}>72 horas</option>
+                                        </select>
+                                        <span className="text-sm text-gray-500">
+                                            {nuevaIdea.length}/{CHAR_LIMIT}
+                                        </span>
+                                    </div>
+                                    <button
+                                        onClick={crearIdea}
+                                        disabled={nuevaIdea.trim().length === 0}
+                                        className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-medium"
+                                    >
+                                        Publicar Idea
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="space-y-4">
+                            {ideas.length === 0 ? (
+                                <div className="text-center py-12 text-gray-400">
+                                    <div className="text-6xl mb-4">💭</div>
+                                    <p>No hay ideas todavía. {puedeCrear ? '¡Sé el primero en compartir!' : ''}</p>
+                                </div>
+                            ) : (
+                                ideas.map(idea => (
+                                    <TarjetaIdea
+                                        key={idea.id}
+                                        idea={idea}
+                                        usuario={usuario}
+                                        rolUsuario={rolUsuario}
+                                    />
+                                ))
+                            )}
+                        </div>
+
+                        {/* Modal de Desafío */}
+                        {mostrarDesafio && desafioActual && (
+                            <ModalDesafio
+                                desafio={desafioActual}
+                                onCerrar={() => setMostrarDesafio(false)}
+                                onNuevoDesafio={obtenerDesafioAleatorio}
+                            />
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        // ============================================================
+        // TARJETA DE IDEA (simplificada)
+        // ============================================================
+        function TarjetaIdea({ idea, usuario, rolUsuario }) {
+            const [expandida, setExpandida] = useState(false);
+            const esCreador = idea.creador === usuario.uid;
+
+            const estadoConfig = {
+                [ESTADOS.INCUBANDO]: { color: 'bg-yellow-100 text-yellow-800', icon: '🥚', label: 'Incubando' },
+                [ESTADOS.ACTIVA]: { color: 'bg-green-100 text-green-800', icon: '⚡', label: 'Activa' },
+                [ESTADOS.MUERTA]: { color: 'bg-gray-100 text-gray-800', icon: '💀', label: 'Expirada' },
+                [ESTADOS.APROBADA]: { color: 'bg-blue-100 text-blue-800', icon: '✓', label: 'Aprobada' },
+                [ESTADOS.RECHAZADA]: { color: 'bg-red-100 text-red-800', icon: '✗', label: 'Rechazada' }
+            };
+
+            const config = estadoConfig[idea.estado] || estadoConfig[ESTADOS.INCUBANDO];
+
+            return (
+                <div className="bg-white rounded-xl shadow-md hover:shadow-lg transition-shadow overflow-hidden fade-in">
+                    <div className="p-6">
+                        <div className="flex justify-between items-start mb-4">
+                            <div>
+                                <span className={`px-3 py-1 rounded-full text-xs font-semibold ${config.color}`}>
+                                    {config.icon} {config.label}
+                                </span>
+                                <p className="text-xs text-gray-500 mt-2">
+                                    Por {idea.creadorNombre}
+                                </p>
+                            </div>
+                        </div>
+
+                        <p className="text-lg text-gray-800 mb-4 leading-relaxed">{idea.texto}</p>
+
+                        <button
+                            onClick={() => setExpandida(!expandida)}
+                            className="text-purple-600 hover:text-purple-700 font-medium text-sm"
+                        >
+                            {expandida ? '▼ Ocultar' : `▶ Ver más`}
+                        </button>
+
+                        {expandida && (
+                            <div className="mt-4 pt-4 border-t">
+                                <p className="text-sm text-gray-500">
+                                    💡 Esta es una versión base. Las funciones completas de reacciones, 
+                                    comentarios, adjuntos y edición están disponibles y pueden agregarse.
+                                </p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        // ============================================================
+        // MODAL DESAFÍO
+        // ============================================================
+        function ModalDesafio({ desafio, onCerrar, onNuevoDesafio }) {
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <div className="bg-white rounded-2xl p-8 w-full max-w-2xl fade-in max-h-[80vh] overflow-y-auto">
+                        <div className="flex justify-between items-start mb-6">
+                            <div>
+                                <h2 className="text-3xl font-bold text-orange-600 mb-2">🎲 {desafio.titulo}</h2>
+                                <p className="text-gray-500 text-sm">Ejercicio de creatividad</p>
+                            </div>
+                            <button 
+                                onClick={onCerrar}
+                                className="text-gray-500 hover:text-gray-700 text-3xl leading-none"
+                            >
+                                ×
+                            </button>
+                        </div>
+
+                        <div className="space-y-6">
+                            {/* Descripción */}
+                            <div className="bg-orange-50 rounded-xl p-6 border-2 border-orange-200">
+                                <h3 className="font-bold text-gray-800 mb-2 text-lg">📝 Desafío:</h3>
+                                <p className="text-gray-700 text-lg">{desafio.descripcion}</p>
+                            </div>
+
+                            {/* Ejemplo */}
+                            {desafio.ejemplo && (
+                                <div className="bg-blue-50 rounded-xl p-6 border-2 border-blue-200">
+                                    <h3 className="font-bold text-gray-800 mb-2">💡 Ejemplo:</h3>
+                                    <p className="text-gray-700 italic">"{desafio.ejemplo}"</p>
+                                </div>
+                            )}
+
+                            {/* Instrucciones */}
+                            {desafio.instrucciones && (
+                                <div className="bg-purple-50 rounded-xl p-6 border-2 border-purple-200">
+                                    <h3 className="font-bold text-gray-800 mb-2">⚡ Instrucciones:</h3>
+                                    <p className="text-gray-700">{desafio.instrucciones}</p>
+                                </div>
+                            )}
+
+                            {/* Consejo */}
+                            <div className="bg-green-50 rounded-xl p-4 border-l-4 border-green-500">
+                                <p className="text-sm text-green-800">
+                                    <strong>💚 Consejo:</strong> No te presiones. El objetivo es destrabar tu mente y divertirte. 
+                                    Escribe lo primero que se te ocurra, por ridículo que parezca.
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Botones */}
+                        <div className="flex gap-3 mt-8">
+                            <button
+                                onClick={onNuevoDesafio}
+                                className="flex-1 px-6 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors font-semibold"
+                            >
+                                🎲 Otro Desafío
+                            </button>
+                            <button
+                                onClick={onCerrar}
+                                className="flex-1 px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-semibold"
+                            >
+                                Cerrar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // ============================================================
+        // MODALES
+        // ============================================================
+        function ModalNuevaSala({ onCrear, onCerrar }) {
+            const [nombre, setNombre] = useState('');
+            const [color, setColor] = useState('blue');
+            
+            const colores = ['blue', 'green', 'purple', 'red', 'yellow', 'pink', 'indigo', 'orange'];
+
+            function handleSubmit(e) {
+                e.preventDefault();
+                if (nombre.trim()) {
+                    onCrear(nombre.trim(), color);
+                }
+            }
+
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <div className="bg-white rounded-xl p-6 w-full max-w-md fade-in">
+                        <h2 className="text-xl font-bold mb-4">Nueva Sala</h2>
+                        <form onSubmit={handleSubmit}>
+                            <div className="mb-4">
+                                <label className="block text-gray-700 text-sm font-semibold mb-2">
+                                    Nombre de la sala
+                                </label>
+                                <input
+                                    type="text"
+                                    value={nombre}
+                                    onChange={(e) => setNombre(e.target.value)}
+                                    className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none"
+                                    placeholder="Ej: Marketing, Desarrollo..."
+                                    required
+                                />
+                            </div>
+
+                            <div className="mb-6">
+                                <label className="block text-gray-700 text-sm font-semibold mb-2">
+                                    Color
+                                </label>
+                                <div className="flex flex-wrap gap-2">
+                                    {colores.map(c => (
+                                        <button
+                                            key={c}
+                                            type="button"
+                                            onClick={() => setColor(c)}
+                                            className={`w-8 h-8 rounded-full bg-${c}-500 ${
+                                                color === c ? 'ring-4 ring-gray-300' : ''
+                                            }`}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="flex gap-3">
+                                <button
+                                    type="button"
+                                    onClick={onCerrar}
+                                    className="flex-1 px-4 py-2 border-2 border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                                >
+                                    Crear
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            );
+        }
+
+        function ModalInvitar({ sala, miembros, onCerrar }) {
+            const [email, setEmail] = useState('');
+            const [rol, setRol] = useState(ROLES.EDITOR);
+            const [mensaje, setMensaje] = useState('');
+            const [error, setError] = useState('');
+            const [cargando, setCargando] = useState(false);
+
+            async function handleInvitar(e) {
+                e.preventDefault();
+                setError('');
+                setMensaje('');
+                setCargando(true);
+
+                try {
+                    // Buscar usuario por email
+                    const usuariosQuery = await db.collection('usuarios')
+                        .where('email', '==', email.trim())
+                        .get();
+
+                    if (usuariosQuery.empty) {
+                        setError('No existe un usuario con ese email. Debe registrarse primero.');
+                        setCargando(false);
+                        return;
+                    }
+
+                    const usuarioInvitado = usuariosQuery.docs[0];
+                    const uidInvitado = usuarioInvitado.id;
+
+                    // Verificar si ya es miembro
+                    if (sala.miembros && sala.miembros[uidInvitado]) {
+                        setError('Este usuario ya es miembro de la sala');
+                        setCargando(false);
+                        return;
+                    }
+
+                    // Agregar como miembro
+                    await db.collection('salas').doc(sala.id).update({
+                        [`miembros.${uidInvitado}`]: rol
+                    });
+
+                    setMensaje(`✅ ${email} ha sido agregado a la sala como ${rol}`);
+                    setEmail('');
+                } catch (error) {
+                    console.error('Error al invitar:', error);
+                    setError('Error al invitar: ' + error.message);
+                }
+
+                setCargando(false);
+            }
+
+            async function cambiarRol(uid, nuevoRol) {
+                try {
+                    await db.collection('salas').doc(sala.id).update({
+                        [`miembros.${uid}`]: nuevoRol
+                    });
+                } catch (error) {
+                    console.error('Error al cambiar rol:', error);
+                    alert('Error al cambiar rol');
+                }
+            }
+
+            async function removerMiembro(uid) {
+                if (!confirm('¿Estás seguro de remover a este miembro?')) return;
+
+                try {
+                    await db.collection('salas').doc(sala.id).update({
+                        [`miembros.${uid}`]: firebase.firestore.FieldValue.delete()
+                    });
+                } catch (error) {
+                    console.error('Error al remover miembro:', error);
+                    alert('Error al remover miembro');
+                }
+            }
+
+            const miembrosSala = Object.entries(sala.miembros || {});
+
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <div className="bg-white rounded-xl p-6 w-full max-w-2xl fade-in max-h-[80vh] overflow-y-auto">
+                        <div className="flex justify-between items-center mb-4">
+                            <h2 className="text-xl font-bold">👥 Gestionar Miembros</h2>
+                            <button onClick={onCerrar} className="text-gray-500 hover:text-gray-700 text-2xl">×</button>
+                        </div>
+
+                        {/* Formulario invitar */}
+                        <form onSubmit={handleInvitar} className="mb-6 p-4 bg-purple-50 rounded-lg">
+                            <h3 className="font-semibold mb-3">Invitar nuevo miembro</h3>
+                            <div className="flex gap-2 mb-2">
+                                <input
+                                    type="email"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    placeholder="email@ejemplo.com"
+                                    className="flex-1 px-3 py-2 border-2 border-purple-200 rounded-lg focus:border-purple-500 focus:outline-none"
+                                    required
+                                />
+                                <select
+                                    value={rol}
+                                    onChange={(e) => setRol(e.target.value)}
+                                    className="px-3 py-2 border-2 border-purple-200 rounded-lg focus:border-purple-500 focus:outline-none"
+                                >
+                                    <option value={ROLES.VIEWER}>Viewer (Solo ver)</option>
+                                    <option value={ROLES.EDITOR}>Editor (Crear ideas)</option>
+                                    <option value={ROLES.ADMIN}>Admin (Gestionar)</option>
+                                </select>
+                                <button
+                                    type="submit"
+                                    disabled={cargando}
+                                    className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-gray-400"
+                                >
+                                    {cargando ? '...' : 'Invitar'}
+                                </button>
+                            </div>
+                            {error && <p className="text-sm text-red-600">{error}</p>}
+                            {mensaje && <p className="text-sm text-green-600">{mensaje}</p>}
+                        </form>
+
+                        {/* Lista de miembros */}
+                        <div>
+                            <h3 className="font-semibold mb-3">Miembros actuales ({miembrosSala.length})</h3>
+                            <div className="space-y-2">
+                                {miembrosSala.map(([uid, rolMiembro]) => {
+                                    const miembro = miembros[uid] || { nombre: 'Cargando...', email: '' };
+                                    return (
+                                        <div key={uid} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                            <div>
+                                                <p className="font-medium">{miembro.nombre}</p>
+                                                <p className="text-sm text-gray-600">{miembro.email}</p>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                {rolMiembro !== ROLES.OWNER ? (
+                                                    <>
+                                                        <select
+                                                            value={rolMiembro}
+                                                            onChange={(e) => cambiarRol(uid, e.target.value)}
+                                                            className="px-2 py-1 border rounded text-sm"
+                                                        >
+                                                            <option value={ROLES.VIEWER}>Viewer</option>
+                                                            <option value={ROLES.EDITOR}>Editor</option>
+                                                            <option value={ROLES.ADMIN}>Admin</option>
+                                                        </select>
+                                                        <button
+                                                            onClick={() => removerMiembro(uid)}
+                                                            className="px-2 py-1 bg-red-100 text-red-700 rounded text-sm hover:bg-red-200"
+                                                        >
+                                                            Remover
+                                                        </button>
+                                                    </>
+                                                ) : (
+                                                    <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded text-sm font-semibold">
+                                                        Owner
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        <div className="mt-6">
+                            <button
+                                onClick={onCerrar}
+                                className="w-full px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                            >
+                                Cerrar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // Renderizar app
+        const root = ReactDOM.createRoot(document.getElementById('app'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
