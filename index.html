@@ -1,0 +1,1078 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crea - Colaboración Creativa</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .fade-in {
+            animation: fadeIn 0.5s ease-out;
+        }
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        @keyframes slideIn {
+            from { transform: translateX(-100%); }
+            to { transform: translateX(0); }
+        }
+        .slide-in {
+            animation: slideIn 0.3s ease-out;
+        }
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+        .bounce-animation {
+            animation: bounce 2s infinite;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div id="app"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const CHAR_LIMIT = 180;
+        const COMMENT_LIMIT = 120;
+
+        const ESTADOS = {
+            INCUBANDO: 'incubando',
+            ACTIVA: 'activa',
+            REALIZADA: 'realizada',
+            RECHAZADA: 'rechazada',
+            EXPIRADA: 'expirada',
+            ELIMINADA: 'eliminada'
+        };
+
+        const reaccionesDisponibles = ['💡', '🔥', '❤️', '👍', '🤔', '⭐', '🚀', '💭'];
+
+        // Desafíos creativos
+        const DESAFIOS = [
+            {
+                id: 1,
+                titulo: "Currículum Absurdo",
+                descripcion: "Crea un currículum para un personaje ficticio con experiencia laboral completamente ridícula",
+                ejemplo: "Chef de Nubes en Fábrica del Cielo (2020-2023): Responsable de darle forma a las nubes para que parezcan animales"
+            },
+            {
+                id: 2,
+                titulo: "Agrega la Premisa",
+                descripcion: "Toma una historia conocida y agrégale una premisa absurda al inicio",
+                ejemplo: "Romeo y Julieta, pero Romeo es alérgico a las personas llamadas Julieta"
+            },
+            {
+                id: 3,
+                titulo: "Animal Imposible",
+                descripcion: "Inventa un animal que no podría existir en la realidad y describe sus características",
+                ejemplo: "El Elefante Transparente: Solo es visible cuando nadie lo está mirando"
+            },
+            {
+                id: 4,
+                titulo: "Objeto Quejumbroso",
+                descripcion: "Escribe un monólogo desde la perspectiva de un objeto cotidiano que se queja de su existencia",
+                ejemplo: "Un calcetín lamentándose de que siempre pierde a su pareja en la lavadora"
+            },
+            {
+                id: 5,
+                titulo: "Excusa Creativa",
+                descripcion: "Inventa la excusa más elaborada y absurda para llegar tarde al trabajo",
+                ejemplo: "Un pulpo me robó las llaves del coche y tuve que negociar con él durante 3 horas"
+            },
+            {
+                id: 6,
+                titulo: "Ducha Épica",
+                descripcion: "Convierte una actividad mundana en una aventura épica al estilo película de acción",
+                ejemplo: "Describe ducharte como si fueras un héroe desarmando una bomba"
+            },
+            {
+                id: 7,
+                titulo: "Perfume Absurdo",
+                descripcion: "Crea un perfume con un nombre y descripción completamente ridículos",
+                ejemplo: "Eau de Calcetín Mojado: El aroma que nadie pidió pero todos recordarán"
+            },
+            {
+                id: 8,
+                titulo: "Día sin Electricidad",
+                descripcion: "Imagina cómo sería tu día si de repente toda la electricidad desapareciera permanentemente",
+                ejemplo: "Tendría que entrenar palomas mensajeras para enviar emails"
+            },
+            {
+                id: 9,
+                titulo: "Pelea con tu IA",
+                descripcion: "Escribe un diálogo donde discutes con tu asistente de IA sobre algo ridículo",
+                ejemplo: "Convencer a la IA de que las pizza con piña es superior"
+            },
+            {
+                id: 10,
+                titulo: "Carta de Amor con Twist",
+                descripcion: "Escribe una carta de amor romántica, pero el objeto de tu amor es algo inesperado",
+                ejemplo: "Una carta de amor apasionada dirigida a tu WiFi"
+            }
+        ];
+
+        // DataManager para localStorage
+        const DataManager = {
+            getSalas: () => JSON.parse(localStorage.getItem('crea-salas') || '[{"id":"trabajo","nombre":"Trabajo","color":"blue"},{"id":"personal","nombre":"Personal","color":"green"},{"id":"proyectos","nombre":"Proyectos","color":"purple"}]'),
+            guardarSalas: (salas) => localStorage.setItem('crea-salas', JSON.stringify(salas)),
+            
+            getIdeas: () => JSON.parse(localStorage.getItem('crea-ideas') || '[]'),
+            guardarIdeas: (ideas) => localStorage.setItem('crea-ideas', JSON.stringify(ideas)),
+            
+            exportarDatos: () => {
+                return {
+                    salas: DataManager.getSalas(),
+                    ideas: DataManager.getIdeas(),
+                    fecha: new Date().toISOString()
+                };
+            }
+        };
+
+        function App() {
+            const [salas, setSalas] = useState([]);
+            const [salaActual, setSalaActual] = useState(null);
+            const [ideas, setIdeas] = useState([]);
+            const [filtroActivo, setFiltroActivo] = useState('todas');
+            const [mostrarModalDesafio, setMostrarModalDesafio] = useState(false);
+            const [desafioActual, setDesafioActual] = useState(null);
+            const [mostrarModalCrearSala, setMostrarModalCrearSala] = useState(false);
+
+            // Cargar datos al inicio
+            useEffect(() => {
+                const salasGuardadas = DataManager.getSalas();
+                setSalas(salasGuardadas);
+                if (salasGuardadas.length > 0) {
+                    setSalaActual(salasGuardadas[0].id);
+                }
+
+                const ideasGuardadas = DataManager.getIdeas();
+                setIdeas(ideasGuardadas);
+
+                // Verificar ideas expiradas cada minuto
+                const interval = setInterval(() => {
+                    verificarIdeasExpiradas();
+                }, 60000);
+
+                return () => clearInterval(interval);
+            }, []);
+
+            // Guardar salas cuando cambien
+            useEffect(() => {
+                if (salas.length > 0) {
+                    DataManager.guardarSalas(salas);
+                }
+            }, [salas]);
+
+            // Guardar ideas cuando cambien
+            useEffect(() => {
+                if (ideas.length > 0) {
+                    DataManager.guardarIdeas(ideas);
+                }
+            }, [ideas]);
+
+            // Limpiar ideas del basurero que tengan más de 30 días
+            useEffect(() => {
+                const ahora = Date.now();
+                const TREINTA_DIAS = 30 * 24 * 60 * 60 * 1000;
+                
+                setIdeas(prevIdeas => 
+                    prevIdeas.filter(idea => {
+                        if (idea.estado === ESTADOS.ELIMINADA && idea.eliminadaAt) {
+                            return (ahora - idea.eliminadaAt) < TREINTA_DIAS;
+                        }
+                        return true;
+                    })
+                );
+            }, []);
+
+            function verificarIdeasExpiradas() {
+                const ahora = Date.now();
+                setIdeas(prevIdeas => 
+                    prevIdeas.map(idea => {
+                        if (idea.estado === ESTADOS.ACTIVA && idea.expiraAt < ahora) {
+                            return { ...idea, estado: ESTADOS.EXPIRADA };
+                        }
+                        return idea;
+                    })
+                );
+            }
+
+            function crearSala(nombre, color) {
+                const nuevaSala = {
+                    id: Date.now().toString(),
+                    nombre: nombre,
+                    color: color
+                };
+                setSalas([...salas, nuevaSala]);
+                setSalaActual(nuevaSala.id);
+                setMostrarModalCrearSala(false);
+            }
+
+            function eliminarSala(salaId) {
+                if (confirm('¿Estás seguro de eliminar esta sala y todas sus ideas?')) {
+                    setSalas(salas.filter(s => s.id !== salaId));
+                    setIdeas(ideas.filter(i => i.salaId !== salaId));
+                    if (salaActual === salaId) {
+                        setSalaActual(salas[0]?.id || null);
+                    }
+                }
+            }
+
+            function crearIdea(texto, duracion) {
+                const ahora = Date.now();
+                const expira = ahora + (duracion * 60 * 60 * 1000);
+                
+                const nuevaIdea = {
+                    id: Date.now().toString(),
+                    salaId: salaActual,
+                    texto: texto,
+                    estado: ESTADOS.INCUBANDO,
+                    createdAt: ahora,
+                    expiraAt: expira,
+                    reacciones: {},
+                    comentarios: []
+                };
+                
+                setIdeas([nuevaIdea, ...ideas]);
+            }
+
+            function aprobarIdea(ideaId) {
+                setIdeas(ideas.map(idea => 
+                    idea.id === ideaId ? { ...idea, estado: ESTADOS.ACTIVA } : idea
+                ));
+            }
+
+            function rechazarIdea(ideaId) {
+                setIdeas(ideas.map(idea => 
+                    idea.id === ideaId ? { ...idea, estado: ESTADOS.RECHAZADA } : idea
+                ));
+            }
+
+            function marcarRealizada(ideaId) {
+                setIdeas(ideas.map(idea => 
+                    idea.id === ideaId ? { ...idea, estado: ESTADOS.REALIZADA } : idea
+                ));
+            }
+
+            function agregarReaccion(ideaId, emoji) {
+                setIdeas(ideas.map(idea => {
+                    if (idea.id === ideaId) {
+                        const reacciones = { ...idea.reacciones };
+                        if (reacciones[emoji]) {
+                            reacciones[emoji]++;
+                        } else {
+                            reacciones[emoji] = 1;
+                        }
+                        return { ...idea, reacciones };
+                    }
+                    return idea;
+                }));
+            }
+
+            function agregarComentario(ideaId, texto, esPropuesta) {
+                const comentario = {
+                    id: Date.now().toString(),
+                    texto: texto,
+                    autorNombre: 'Anónimo',
+                    esPropuesta: esPropuesta,
+                    timestamp: Date.now()
+                };
+
+                setIdeas(ideas.map(idea => {
+                    if (idea.id === ideaId) {
+                        return { ...idea, comentarios: [...idea.comentarios, comentario] };
+                    }
+                    return idea;
+                }));
+            }
+
+            function eliminarIdea(ideaId) {
+                if (confirm('¿Estás seguro de eliminar esta idea?')) {
+                    setIdeas(ideas.filter(i => i.id !== ideaId));
+                }
+            }
+
+            function enviarAlBasurero(ideaId) {
+                if (confirm('¿Enviar esta idea al basurero? Se eliminará permanentemente en 30 días.')) {
+                    setIdeas(ideas.map(idea => {
+                        if (idea.id === ideaId) {
+                            return { 
+                                ...idea, 
+                                estadoAnterior: idea.estado,
+                                estado: ESTADOS.ELIMINADA, 
+                                eliminadaAt: Date.now() 
+                            };
+                        }
+                        return idea;
+                    }));
+                }
+            }
+
+            function restaurarDeBasurero(ideaId) {
+                const idea = ideas.find(i => i.id === ideaId);
+                if (idea && idea.estadoAnterior) {
+                    setIdeas(ideas.map(i => 
+                        i.id === ideaId 
+                            ? { ...i, estado: idea.estadoAnterior, eliminadaAt: null } 
+                            : i
+                    ));
+                }
+            }
+
+            function eliminarPermanentemente(ideaId) {
+                if (confirm('¿Eliminar permanentemente esta idea? Esta acción no se puede deshacer.')) {
+                    setIdeas(ideas.filter(i => i.id !== ideaId));
+                }
+            }
+
+            function mostrarDesafioAleatorio() {
+                const indiceAleatorio = Math.floor(Math.random() * DESAFIOS.length);
+                setDesafioActual(DESAFIOS[indiceAleatorio]);
+                setMostrarModalDesafio(true);
+            }
+
+            function exportarBackup() {
+                const data = DataManager.exportarDatos();
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `crea-backup-${new Date().toISOString().split('T')[0]}.json`;
+                a.click();
+            }
+
+            // Filtrar ideas
+            const ideasDeLaSala = ideas.filter(i => i.salaId === salaActual && i.estado !== ESTADOS.ELIMINADA);
+            
+            let ideasFiltradas = ideasDeLaSala;
+            if (filtroActivo === 'incubando') {
+                ideasFiltradas = ideasDeLaSala.filter(i => i.estado === ESTADOS.INCUBANDO);
+            } else if (filtroActivo === 'activas') {
+                ideasFiltradas = ideasDeLaSala.filter(i => i.estado === ESTADOS.ACTIVA);
+            } else if (filtroActivo === 'realizadas') {
+                ideasFiltradas = ideas.filter(i => i.estado === ESTADOS.REALIZADA);
+            } else if (filtroActivo === 'rechazadas') {
+                ideasFiltradas = ideas.filter(i => i.estado === ESTADOS.RECHAZADA);
+            } else if (filtroActivo === 'expiradas') {
+                ideasFiltradas = ideas.filter(i => i.estado === ESTADOS.EXPIRADA);
+            } else if (filtroActivo === 'basurero') {
+                ideasFiltradas = ideas.filter(i => i.estado === ESTADOS.ELIMINADA);
+            }
+
+            // Contadores
+            const contadores = {
+                realizadas: ideas.filter(i => i.estado === ESTADOS.REALIZADA).length,
+                rechazadas: ideas.filter(i => i.estado === ESTADOS.RECHAZADA).length,
+                expiradas: ideas.filter(i => i.estado === ESTADOS.EXPIRADA).length,
+                eliminadas: ideas.filter(i => i.estado === ESTADOS.ELIMINADA).length,
+                incubando: ideasDeLaSala.filter(i => i.estado === ESTADOS.INCUBANDO).length,
+                activas: ideasDeLaSala.filter(i => i.estado === ESTADOS.ACTIVA).length
+            };
+
+            const salaActualData = salas.find(s => s.id === salaActual);
+
+            return (
+                <div className="min-h-screen bg-gray-50 flex">
+                    {/* Sidebar */}
+                    <aside className="w-64 bg-white shadow-lg min-h-screen sticky top-0 slide-in overflow-y-auto flex flex-col">
+                        <div className="p-4 gradient-bg text-white">
+                            <h2 className="text-xl font-bold">✨ Crea</h2>
+                        </div>
+
+                        {/* Archivo */}
+                        <div className="p-4 border-b">
+                            <h3 className="text-xs font-bold text-gray-500 uppercase mb-2">📂 ARCHIVO</h3>
+                            <button
+                                onClick={() => setFiltroActivo('realizadas')}
+                                className={`w-full text-left px-3 py-2 rounded-lg text-sm mb-1 transition-colors ${
+                                    filtroActivo === 'realizadas'
+                                        ? 'bg-green-100 text-green-800'
+                                        : 'hover:bg-gray-100 text-gray-700'
+                                }`}
+                            >
+                                ✓ Ideas Aprobadas ({contadores.realizadas})
+                            </button>
+                            <button
+                                onClick={() => setFiltroActivo('rechazadas')}
+                                className={`w-full text-left px-3 py-2 rounded-lg text-sm mb-1 transition-colors ${
+                                    filtroActivo === 'rechazadas'
+                                        ? 'bg-red-100 text-red-800'
+                                        : 'hover:bg-gray-100 text-gray-700'
+                                }`}
+                            >
+                                ✗ Ideas Rechazadas ({contadores.rechazadas})
+                            </button>
+                            <button
+                                onClick={() => setFiltroActivo('expiradas')}
+                                className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                                    filtroActivo === 'expiradas'
+                                        ? 'bg-gray-200 text-gray-800'
+                                        : 'hover:bg-gray-100 text-gray-700'
+                                }`}
+                            >
+                                ⏰ Ideas Expiradas ({contadores.expiradas})
+                            </button>
+                        </div>
+
+                        {/* Salas */}
+                        <div className="p-4 flex-1">
+                            <div className="flex justify-between items-center mb-2">
+                                <h3 className="text-xs font-bold text-gray-500 uppercase">📚 SALAS</h3>
+                                <button
+                                    onClick={() => setMostrarModalCrearSala(true)}
+                                    className="text-purple-600 hover:text-purple-700 font-bold text-xl"
+                                    title="Crear nueva sala"
+                                >
+                                    +
+                                </button>
+                            </div>
+                            <div className="space-y-1">
+                                {salas.map(sala => {
+                                    const colorClasses = {
+                                        blue: 'bg-blue-100 text-blue-800',
+                                        green: 'bg-green-100 text-green-800',
+                                        purple: 'bg-purple-100 text-purple-800',
+                                        red: 'bg-red-100 text-red-800',
+                                        yellow: 'bg-yellow-100 text-yellow-800',
+                                        pink: 'bg-pink-100 text-pink-800',
+                                        indigo: 'bg-indigo-100 text-indigo-800',
+                                        orange: 'bg-orange-100 text-orange-800'
+                                    };
+                                    
+                                    const colorClass = colorClasses[sala.color] || 'bg-gray-100 text-gray-800';
+                                    const isActive = salaActual === sala.id;
+                                    
+                                    return (
+                                        <div key={sala.id} className="flex items-center gap-1">
+                                            <button
+                                                onClick={() => {
+                                                    setSalaActual(sala.id);
+                                                    setFiltroActivo('todas');
+                                                }}
+                                                className={`flex-1 text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                                                    isActive
+                                                        ? colorClass
+                                                        : 'bg-gray-50 hover:bg-gray-100 text-gray-700'
+                                                }`}
+                                            >
+                                                📁 {sala.nombre}
+                                            </button>
+                                            <button
+                                                onClick={() => eliminarSala(sala.id)}
+                                                className="text-red-500 hover:text-red-700 text-sm px-2"
+                                                title="Eliminar sala"
+                                            >
+                                                ✗
+                                            </button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        {/* Datos */}
+                        <div className="p-4 border-t mt-auto">
+                            <h3 className="text-xs font-bold text-gray-500 uppercase mb-2">💾 DATOS</h3>
+                            <button
+                                onClick={exportarBackup}
+                                className="w-full text-left px-3 py-2 rounded-lg text-sm hover:bg-gray-100 text-gray-700 mb-2"
+                            >
+                                📥 Exportar backup
+                            </button>
+                            <button
+                                onClick={() => setFiltroActivo('basurero')}
+                                className={`w-full text-left px-3 py-2 rounded-lg text-sm mb-2 transition-colors ${
+                                    filtroActivo === 'basurero'
+                                        ? 'bg-gray-200 text-gray-800'
+                                        : 'hover:bg-gray-100 text-gray-700'
+                                }`}
+                            >
+                                🗑️ Basurero ({contadores.eliminadas})
+                            </button>
+                            <button
+                                onClick={() => {
+                                    if (confirm('¿Cerrar sesión?')) {
+                                        localStorage.clear();
+                                        window.location.reload();
+                                    }
+                                }}
+                                className="w-full text-left px-3 py-2 rounded-lg text-sm hover:bg-red-50 text-red-600 font-medium"
+                            >
+                                🚪 Cerrar Sesión
+                            </button>
+                        </div>
+                    </aside>
+
+                    {/* Contenido principal */}
+                    <main className="flex-1 overflow-y-auto">
+                        <header className="bg-white shadow-sm sticky top-0 z-40">
+                            <div className="max-w-5xl mx-auto px-6 py-4">
+                                <div className="flex items-center justify-between mb-4">
+                                    <h1 className="text-2xl font-bold text-gray-800">
+                                        {salaActualData?.nombre || 'Selecciona una sala'}
+                                    </h1>
+                                    <button
+                                        onClick={mostrarDesafioAleatorio}
+                                        className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg font-medium transition-colors bounce-animation"
+                                    >
+                                        🎲 Desafío
+                                    </button>
+                                </div>
+
+                                {/* Pestañas */}
+                                {salaActual && (
+                                    <div className="flex gap-2 overflow-x-auto pb-2">
+                                        <button
+                                            onClick={() => setFiltroActivo('todas')}
+                                            className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-colors ${
+                                                filtroActivo === 'todas'
+                                                    ? 'gradient-bg text-white'
+                                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                            }`}
+                                        >
+                                            Todas ({ideasDeLaSala.length})
+                                        </button>
+                                        <button
+                                            onClick={() => setFiltroActivo('incubando')}
+                                            className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-colors ${
+                                                filtroActivo === 'incubando'
+                                                    ? 'bg-yellow-500 text-white'
+                                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                            }`}
+                                        >
+                                            🥚 Incubando ({contadores.incubando})
+                                        </button>
+                                        <button
+                                            onClick={() => setFiltroActivo('activas')}
+                                            className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-colors ${
+                                                filtroActivo === 'activas'
+                                                    ? 'bg-green-500 text-white'
+                                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                            }`}
+                                        >
+                                            ⚡ Activas ({contadores.activas})
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        </header>
+
+                        <div className="max-w-5xl mx-auto px-6 py-6">
+                            {!salaActual ? (
+                                <div className="text-center py-20">
+                                    <div className="text-6xl mb-4">📭</div>
+                                    <h2 className="text-2xl font-bold text-gray-800 mb-2">
+                                        Selecciona una sala
+                                    </h2>
+                                    <p className="text-gray-600">
+                                        Crea una nueva sala para empezar
+                                    </p>
+                                </div>
+                            ) : (
+                                <div>
+                                    {/* Tarjeta crear idea */}
+                                    {(filtroActivo === 'todas' || filtroActivo === 'incubando' || filtroActivo === 'activas') && (
+                                        <CrearIdeaForm onCrear={crearIdea} />
+                                    )}
+                                    
+                                    <IdeasList
+                                        ideas={ideasFiltradas}
+                                        onReaccionar={agregarReaccion}
+                                        onComentar={agregarComentario}
+                                        onAprobar={aprobarIdea}
+                                        onRechazar={rechazarIdea}
+                                        onMarcarRealizada={marcarRealizada}
+                                        onEliminar={eliminarIdea}
+                                        onEnviarAlBasurero={enviarAlBasurero}
+                                        onRestaurar={restaurarDeBasurero}
+                                        onEliminarPermanentemente={eliminarPermanentemente}
+                                        esArchivo={filtroActivo === 'realizadas' || filtroActivo === 'rechazadas' || filtroActivo === 'expiradas'}
+                                        esBasurero={filtroActivo === 'basurero'}
+                                    />
+                                </div>
+                            )}
+                        </div>
+                    </main>
+
+                    {/* Modales */}
+                    {mostrarModalCrearSala && (
+                        <ModalCrearSala
+                            onCrear={crearSala}
+                            onCerrar={() => setMostrarModalCrearSala(false)}
+                        />
+                    )}
+
+                    {mostrarModalDesafio && desafioActual && (
+                        <ModalDesafio
+                            desafio={desafioActual}
+                            onCerrar={() => setMostrarModalDesafio(false)}
+                            onOtro={mostrarDesafioAleatorio}
+                        />
+                    )}
+                </div>
+            );
+        }
+
+        // Formulario crear idea
+        function CrearIdeaForm({ onCrear }) {
+            const [texto, setTexto] = useState('');
+            const [duracion, setDuracion] = useState(24);
+
+            function handleSubmit(e) {
+                e.preventDefault();
+                if (texto.trim()) {
+                    onCrear(texto.trim(), duracion);
+                    setTexto('');
+                }
+            }
+
+            return (
+                <div className="bg-white rounded-xl shadow-md p-6 mb-6 fade-in">
+                    <h2 className="text-xl font-bold text-gray-800 mb-4">💡 Comparte tu idea</h2>
+                    <form onSubmit={handleSubmit}>
+                        <textarea
+                            value={texto}
+                            onChange={(e) => setTexto(e.target.value.slice(0, CHAR_LIMIT))}
+                            placeholder="Escribe tu premisa o idea de forma concisa..."
+                            className="w-full p-4 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none resize-none"
+                            rows="3"
+                        />
+                        <div className="flex justify-between items-center mt-3">
+                            <div className="flex items-center gap-4">
+                                <select
+                                    value={duracion}
+                                    onChange={(e) => setDuracion(Number(e.target.value))}
+                                    className="px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none text-sm"
+                                >
+                                    <option value={24}>24 horas</option>
+                                    <option value={48}>48 horas</option>
+                                    <option value={72}>72 horas</option>
+                                </select>
+                                <span className="text-sm text-gray-500">
+                                    {texto.length}/{CHAR_LIMIT}
+                                </span>
+                            </div>
+                            <button
+                                type="submit"
+                                disabled={texto.trim().length === 0}
+                                className="gradient-bg text-white px-6 py-2 rounded-lg font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+                            >
+                                Publicar Idea
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            );
+        }
+
+        // Lista de ideas
+        function IdeasList({ ideas, onReaccionar, onComentar, onAprobar, onRechazar, onMarcarRealizada, onEliminar, onEnviarAlBasurero, onRestaurar, onEliminarPermanentemente, esArchivo, esBasurero }) {
+            if (ideas.length === 0) {
+                return (
+                    <div className="text-center py-20">
+                        <div className="text-6xl mb-4">{esBasurero ? '🗑️' : '💡'}</div>
+                        <h3 className="text-xl font-bold text-gray-800 mb-2">
+                            {esBasurero 
+                                ? 'El basurero está vacío' 
+                                : esArchivo 
+                                    ? 'No hay ideas en este archivo' 
+                                    : 'Aún no hay ideas'}
+                        </h3>
+                        <p className="text-gray-600">
+                            {esBasurero 
+                                ? 'Las ideas eliminadas aparecerán aquí por 30 días'
+                                : '¡Sé el primero en compartir una idea creativa!'}
+                        </p>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="space-y-4">
+                    {ideas.map(idea => (
+                        <TarjetaIdea
+                            key={idea.id}
+                            idea={idea}
+                            onReaccionar={onReaccionar}
+                            onComentar={onComentar}
+                            onAprobar={onAprobar}
+                            onRechazar={onRechazar}
+                            onMarcarRealizada={onMarcarRealizada}
+                            onEliminar={onEliminar}
+                            onEnviarAlBasurero={onEnviarAlBasurero}
+                            onRestaurar={onRestaurar}
+                            onEliminarPermanentemente={onEliminarPermanentemente}
+                            esArchivo={esArchivo}
+                            esBasurero={esBasurero}
+                        />
+                    ))}
+                </div>
+            );
+        }
+
+        // Tarjeta de idea
+        function TarjetaIdea({ idea, onReaccionar, onComentar, onAprobar, onRechazar, onMarcarRealizada, onEliminar, onEnviarAlBasurero, onRestaurar, onEliminarPermanentemente, esArchivo, esBasurero }) {
+            const [expandida, setExpandida] = useState(false);
+            const [mostrarReacciones, setMostrarReacciones] = useState(false);
+            const [nuevoComentario, setNuevoComentario] = useState('');
+            const [esPropuesta, setEsPropuesta] = useState(false);
+
+            const ahora = Date.now();
+            const tiempoRestante = Math.max(0, idea.expiraAt - ahora);
+            const horasRestantes = Math.floor(tiempoRestante / (1000 * 60 * 60));
+            const minutosRestantes = Math.floor((tiempoRestante % (1000 * 60 * 60)) / (1000 * 60));
+
+            // Calcular días restantes en basurero
+            const diasEnBasurero = idea.eliminadaAt 
+                ? Math.ceil((30 * 24 * 60 * 60 * 1000 - (ahora - idea.eliminadaAt)) / (24 * 60 * 60 * 1000))
+                : 0;
+
+            const estadoConfig = {
+                [ESTADOS.INCUBANDO]: { bg: 'bg-yellow-50', border: 'border-yellow-300', text: 'text-yellow-800', icono: '🥚' },
+                [ESTADOS.ACTIVA]: { bg: 'bg-green-50', border: 'border-green-300', text: 'text-green-800', icono: '⚡' },
+                [ESTADOS.REALIZADA]: { bg: 'bg-green-50', border: 'border-green-300', text: 'text-green-800', icono: '✓' },
+                [ESTADOS.RECHAZADA]: { bg: 'bg-red-50', border: 'border-red-300', text: 'text-red-800', icono: '✗' },
+                [ESTADOS.EXPIRADA]: { bg: 'bg-gray-50', border: 'border-gray-300', text: 'text-gray-800', icono: '⏰' },
+                [ESTADOS.ELIMINADA]: { bg: 'bg-gray-100', border: 'border-gray-400', text: 'text-gray-700', icono: '🗑️' }
+            };
+
+            const config = estadoConfig[idea.estado];
+
+            function handleEnviarComentario() {
+                if (nuevoComentario.trim()) {
+                    onComentar(idea.id, nuevoComentario.trim(), esPropuesta);
+                    setNuevoComentario('');
+                    setEsPropuesta(false);
+                }
+            }
+
+            return (
+                <div className={`bg-white rounded-xl shadow-md p-6 fade-in border-l-4 ${config.border}`}>
+                    <div className="flex justify-between items-start mb-4">
+                        <div className="flex items-center gap-2">
+                            <span className={`px-3 py-1 rounded text-xs font-medium ${config.bg} ${config.text}`}>
+                                {config.icono} {idea.estado.charAt(0).toUpperCase() + idea.estado.slice(1)}
+                            </span>
+                            {idea.estado === ESTADOS.ACTIVA && (
+                                <span className="text-xs text-gray-500">
+                                    ⏱️ {horasRestantes}h {minutosRestantes}m
+                                </span>
+                            )}
+                            {esBasurero && (
+                                <span className="text-xs text-red-500">
+                                    ⚠️ Se eliminará en {diasEnBasurero} días
+                                </span>
+                            )}
+                        </div>
+                        {idea.estado === ESTADOS.ACTIVA && !esArchivo && !esBasurero && (
+                            <button
+                                onClick={() => onMarcarRealizada(idea.id)}
+                                className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium"
+                            >
+                                ✓ Realizada
+                            </button>
+                        )}
+                    </div>
+
+                    <p className="text-gray-800 text-lg mb-4">{idea.texto}</p>
+
+                    {/* Botones para basurero */}
+                    {esBasurero && (
+                        <div className="flex gap-2 mb-4">
+                            <button
+                                onClick={() => onRestaurar(idea.id)}
+                                className="flex-1 bg-blue-100 text-blue-700 px-4 py-2 rounded-lg hover:bg-blue-200 font-medium"
+                            >
+                                ↩️ Restaurar
+                            </button>
+                            <button
+                                onClick={() => onEliminarPermanentemente(idea.id)}
+                                className="flex-1 bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 font-medium"
+                            >
+                                🗑️ Eliminar permanentemente
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Botón eliminar para archivos */}
+                    {esArchivo && !esBasurero && (
+                        <button
+                            onClick={() => onEnviarAlBasurero(idea.id)}
+                            className="mb-4 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors font-medium text-sm"
+                        >
+                            🗑️ Enviar al basurero
+                        </button>
+                    )}
+
+                    {idea.estado === ESTADOS.INCUBANDO && !esArchivo && !esBasurero && (
+                        <div className="flex gap-2 mb-4">
+                            <button
+                                onClick={() => onAprobar(idea.id)}
+                                className="flex-1 bg-green-100 text-green-700 px-4 py-2 rounded-lg hover:bg-green-200 font-medium"
+                            >
+                                ✓ Aprobar Idea
+                            </button>
+                            <button
+                                onClick={() => onRechazar(idea.id)}
+                                className="flex-1 bg-red-100 text-red-700 px-4 py-2 rounded-lg hover:bg-red-200 font-medium"
+                            >
+                                ✗ Rechazar Idea
+                            </button>
+                        </div>
+                    )}
+
+                    {!esArchivo && !esBasurero && (
+                        <div className="flex flex-wrap gap-2 mb-4">
+                            {Object.entries(idea.reacciones).map(([emoji, count]) => (
+                                <button
+                                    key={emoji}
+                                    onClick={() => onReaccionar(idea.id, emoji)}
+                                    className="px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded-full text-sm"
+                                >
+                                    {emoji} {count}
+                                </button>
+                            ))}
+                            {idea.estado !== ESTADOS.RECHAZADA && idea.estado !== ESTADOS.EXPIRADA && (
+                                <div className="relative">
+                                    <button
+                                        onClick={() => setMostrarReacciones(!mostrarReacciones)}
+                                        className="px-3 py-1 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-full text-sm"
+                                    >
+                                        + Reaccionar
+                                    </button>
+                                    {mostrarReacciones && (
+                                        <div className="absolute top-full mt-2 bg-white shadow-lg rounded-lg p-2 flex gap-1 z-10 border-2 border-purple-200">
+                                            {reaccionesDisponibles.map(emoji => (
+                                                <button
+                                                    key={emoji}
+                                                    onClick={() => {
+                                                        onReaccionar(idea.id, emoji);
+                                                        setMostrarReacciones(false);
+                                                    }}
+                                                    className="text-2xl hover:scale-125 transition-transform p-1"
+                                                >
+                                                    {emoji}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    <button
+                        onClick={() => setExpandida(!expandida)}
+                        className="text-purple-600 hover:text-purple-700 font-medium text-sm mb-2"
+                    >
+                        {expandida ? '▼ Ocultar comentarios' : `▶ Ver comentarios (${idea.comentarios.length})`}
+                    </button>
+
+                    {expandida && (
+                        <div className="mt-4 space-y-3 border-t pt-4">
+                            {idea.comentarios.map(comentario => (
+                                <div key={comentario.id} className="bg-gray-50 rounded-lg p-3">
+                                    <div className="flex justify-between items-start mb-1">
+                                        <span className="font-medium text-sm">{comentario.autorNombre}</span>
+                                        {comentario.esPropuesta && (
+                                            <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
+                                                💡 Propuesta
+                                            </span>
+                                        )}
+                                    </div>
+                                    <p className="text-gray-700">{comentario.texto}</p>
+                                </div>
+                            ))}
+
+                            {!esArchivo && !esBasurero && idea.estado !== ESTADOS.RECHAZADA && idea.estado !== ESTADOS.EXPIRADA && (
+                                <div className="bg-purple-50 rounded-lg p-3">
+                                    <textarea
+                                        value={nuevoComentario}
+                                        onChange={(e) => setNuevoComentario(e.target.value.slice(0, COMMENT_LIMIT))}
+                                        placeholder="Agrega tu comentario o propuesta..."
+                                        className="w-full p-2 border border-purple-200 rounded-lg focus:border-purple-500 focus:outline-none resize-none text-sm"
+                                        rows="2"
+                                    />
+                                    <div className="flex justify-between items-center mt-2">
+                                        <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={esPropuesta}
+                                                onChange={(e) => setEsPropuesta(e.target.checked)}
+                                                className="rounded"
+                                            />
+                                            💡 Marcar como propuesta
+                                        </label>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs text-gray-500">
+                                                {nuevoComentario.length}/{COMMENT_LIMIT}
+                                            </span>
+                                            <button
+                                                onClick={handleEnviarComentario}
+                                                disabled={nuevoComentario.trim().length === 0}
+                                                className="px-3 py-1 bg-purple-600 text-white rounded text-sm hover:bg-purple-700 disabled:bg-gray-300"
+                                            >
+                                                Enviar
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // Modal crear sala
+        function ModalCrearSala({ onCrear, onCerrar }) {
+            const [nombre, setNombre] = useState('');
+            const [colorSeleccionado, setColorSeleccionado] = useState('blue');
+
+            const colores = [
+                { id: 'blue', bg: 'bg-blue-500', label: 'Azul' },
+                { id: 'green', bg: 'bg-green-500', label: 'Verde' },
+                { id: 'purple', bg: 'bg-purple-500', label: 'Morado' },
+                { id: 'red', bg: 'bg-red-500', label: 'Rojo' },
+                { id: 'yellow', bg: 'bg-yellow-500', label: 'Amarillo' },
+                { id: 'pink', bg: 'bg-pink-500', label: 'Rosa' },
+                { id: 'indigo', bg: 'bg-indigo-500', label: 'Índigo' },
+                { id: 'orange', bg: 'bg-orange-500', label: 'Naranja' }
+            ];
+
+            function handleSubmit(e) {
+                e.preventDefault();
+                if (nombre.trim()) {
+                    onCrear(nombre.trim(), colorSeleccionado);
+                }
+            }
+
+            return (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md fade-in">
+                        <h2 className="text-2xl font-bold text-gray-800 mb-6">Nueva Sala</h2>
+                        
+                        <form onSubmit={handleSubmit} className="space-y-6">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Nombre de la sala
+                                </label>
+                                <input
+                                    type="text"
+                                    value={nombre}
+                                    onChange={(e) => setNombre(e.target.value)}
+                                    placeholder="Ej: Marketing, Desarrollo..."
+                                    autoFocus
+                                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-3">
+                                    Color
+                                </label>
+                                <div className="flex gap-3 flex-wrap">
+                                    {colores.map(color => (
+                                        <button
+                                            key={color.id}
+                                            type="button"
+                                            onClick={() => setColorSeleccionado(color.id)}
+                                            className={`w-12 h-12 rounded-full ${color.bg} transition-transform ${
+                                                colorSeleccionado === color.id
+                                                    ? 'ring-4 ring-offset-2 ring-gray-400 scale-110'
+                                                    : 'hover:scale-105'
+                                            }`}
+                                            title={color.label}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+                            
+                            <div className="flex gap-3">
+                                <button
+                                    type="button"
+                                    onClick={onCerrar}
+                                    className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={!nombre.trim()}
+                                    className="flex-1 px-6 py-3 gradient-bg text-white rounded-lg hover:opacity-90 font-medium transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    Crear
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            );
+        }
+
+        // Modal desafío
+        function ModalDesafio({ desafio, onCerrar, onOtro }) {
+            return (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-gradient-to-br from-orange-50 to-yellow-50 rounded-2xl shadow-2xl p-8 w-full max-w-lg fade-in border-4 border-orange-300">
+                        <div className="flex justify-between items-start mb-6">
+                            <div className="flex-1">
+                                <div className="text-4xl mb-2">🎲</div>
+                                <h2 className="text-3xl font-bold text-orange-800 mb-2">
+                                    {desafio.titulo}
+                                </h2>
+                            </div>
+                            <button
+                                onClick={onCerrar}
+                                className="text-orange-500 hover:text-orange-700 text-3xl font-bold"
+                            >
+                                ×
+                            </button>
+                        </div>
+                        
+                        <div className="bg-white rounded-xl p-6 mb-6 shadow-md">
+                            <h3 className="font-bold text-gray-800 mb-3 text-lg">📝 El Desafío:</h3>
+                            <p className="text-gray-700 mb-4 text-lg leading-relaxed">
+                                {desafio.descripcion}
+                            </p>
+                            
+                            <div className="bg-orange-50 rounded-lg p-4 border-l-4 border-orange-400">
+                                <h4 className="font-bold text-orange-800 mb-2">💡 Ejemplo:</h4>
+                                <p className="text-gray-700 italic">
+                                    "{desafio.ejemplo}"
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="flex gap-3">
+                            <button
+                                onClick={onOtro}
+                                className="flex-1 bg-gradient-to-r from-orange-500 to-yellow-500 text-white py-3 px-6 rounded-xl font-bold hover:from-orange-600 hover:to-yellow-600"
+                            >
+                                🎲 Otro Desafío
+                            </button>
+                            <button
+                                onClick={onCerrar}
+                                className="px-6 py-3 bg-white border-2 border-orange-300 text-orange-700 rounded-xl font-bold hover:bg-orange-50"
+                            >
+                                ¡Vamos! 🚀
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('app'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
