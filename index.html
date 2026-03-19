@@ -1073,6 +1073,14 @@
                 }
             }
 
+            async function marcarTodasLeidas() {
+                const batch = db.batch();
+                notificaciones.forEach(notif => {
+                    batch.update(db.collection('notificaciones').doc(notif.id), { leida: true });
+                });
+                await batch.commit();
+            }
+
             // Aplicar dark mode al body
             useEffect(() => {
                 if (darkMode) {
@@ -1518,35 +1526,42 @@
 
                         {/* Invitaciones Pendientes */}
                         {invitacionesPendientes.length > 0 && (
-                            <div className="p-4 border-b bg-yellow-50">
-                                <h3 className="text-xs font-bold text-yellow-800 uppercase mb-2">
-                                    📬 INVITACIONES ({invitacionesPendientes.length})
+                            <div className="p-4 border-b">
+                                <h3 className="text-xs font-bold text-gray-500 uppercase mb-3 flex items-center gap-2">
+                                    <span className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">
+                                        📬 {invitacionesPendientes.length} invitación{invitacionesPendientes.length > 1 ? 'es' : ''}
+                                    </span>
                                 </h3>
-                                <div className="space-y-2">
+                                <div className="space-y-3">
                                     {invitacionesPendientes.map(inv => (
-                                        <div key={inv.id} className="bg-white rounded-lg p-2 text-xs">
-                                            <p className="font-medium text-gray-800 mb-1">
-                                                📁 {inv.salaNombre}
-                                            </p>
-                                            <p className="text-gray-600 text-xs mb-2">
-                                                Por: {inv.invitadoPor}
-                                            </p>
-                                            <div className="flex gap-1">
+                                        <div key={inv.id} className="bg-gradient-to-br from-purple-50 to-indigo-50 border border-purple-200 rounded-xl p-3">
+                                            <div className="flex items-start gap-2 mb-2">
+                                                <span className="text-xl flex-shrink-0">📁</span>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="font-semibold text-gray-800 text-sm truncate">
+                                                        {inv.salaNombre}
+                                                    </p>
+                                                    <p className="text-xs text-gray-500 mt-0.5">
+                                                        Invitado por <span className="font-medium text-purple-700">{inv.invitadoPor}</span>
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="flex gap-2">
                                                 <button
                                                     onClick={() => {
                                                         aceptarInvitacion(inv.id);
                                                         setSidebarAbierto(false);
                                                     }}
-                                                    className="flex-1 bg-green-500 text-white px-2 py-1 rounded text-xs hover:bg-green-600"
+                                                    className="flex-1 bg-green-500 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center justify-center gap-1"
                                                 >
-                                                    ✓ Aceptar
+                                                    ✓ Unirme
                                                 </button>
                                                 <button
                                                     onClick={() => {
                                                         rechazarInvitacion(inv.id);
                                                         setSidebarAbierto(false);
                                                     }}
-                                                    className="flex-1 bg-red-500 text-white px-2 py-1 rounded text-xs hover:bg-red-600"
+                                                    className="flex-1 bg-white hover:bg-red-50 text-red-500 border border-red-200 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center justify-center gap-1"
                                                 >
                                                     ✗ Rechazar
                                                 </button>
@@ -1865,42 +1880,66 @@
                                             
                                             {/* Panel de notificaciones */}
                                             {mostrarNotificaciones && (
-                                                <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-2xl border-2 border-gray-200 z-50 max-h-96 overflow-y-auto">
-                                                    <div className="p-4 border-b bg-gradient-to-r from-purple-500 to-indigo-600 text-white sticky top-0">
+                                                <div className="absolute right-0 mt-2 w-96 bg-white rounded-xl shadow-2xl border border-gray-200 z-50 max-h-[480px] flex flex-col overflow-hidden">
+                                                    {/* Header */}
+                                                    <div className="px-4 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white flex-shrink-0">
                                                         <div className="flex justify-between items-center">
-                                                            <h3 className="font-bold">🔔 Notificaciones</h3>
-                                                            <button
-                                                                onClick={() => setMostrarNotificaciones(false)}
-                                                                className="text-white hover:bg-white/20 rounded px-2"
-                                                            >
-                                                                ×
-                                                            </button>
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="font-bold text-base">Notificaciones</span>
+                                                                {notificaciones.length > 0 && (
+                                                                    <span className="bg-white/25 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                                                                        {notificaciones.length} nuevas
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                {notificaciones.length > 0 && (
+                                                                    <button
+                                                                        onClick={marcarTodasLeidas}
+                                                                        className="text-xs text-white/80 hover:text-white underline underline-offset-2"
+                                                                    >
+                                                                        Marcar todas leídas
+                                                                    </button>
+                                                                )}
+                                                                <button
+                                                                    onClick={() => setMostrarNotificaciones(false)}
+                                                                    className="text-white hover:bg-white/20 rounded-lg w-7 h-7 flex items-center justify-center text-lg font-bold"
+                                                                >
+                                                                    ×
+                                                                </button>
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                    {notificaciones.length === 0 ? (
-                                                        <div className="p-8 text-center text-gray-500">
-                                                            <div className="text-4xl mb-2">✨</div>
-                                                            <p>No tienes notificaciones</p>
-                                                        </div>
-                                                    ) : (
-                                                        <div className="divide-y">
-                                                            {notificaciones.map(notif => (
-                                                                <div 
-                                                                    key={notif.id}
-                                                                    className="p-4 hover:bg-gray-50 cursor-pointer transition-colors"
-                                                                    onClick={() => marcarNotificacionLeida(notif.id)}
-                                                                >
-                                                                    <div className="flex items-start gap-3">
-                                                                        <div className="text-2xl flex-shrink-0">{notif.icono || '👤'}</div>
+
+                                                    {/* Lista */}
+                                                    <div className="overflow-y-auto flex-1">
+                                                        {notificaciones.length === 0 ? (
+                                                            <div className="p-10 text-center text-gray-400">
+                                                                <div className="text-5xl mb-3">🔕</div>
+                                                                <p className="font-medium text-gray-500">Todo al día</p>
+                                                                <p className="text-xs mt-1">No tienes notificaciones pendientes</p>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="divide-y divide-gray-50">
+                                                                {notificaciones.map(notif => (
+                                                                    <div
+                                                                        key={notif.id}
+                                                                        className="flex items-start gap-3 px-4 py-3 hover:bg-purple-50 cursor-pointer transition-colors group"
+                                                                        onClick={() => marcarNotificacionLeida(notif.id)}
+                                                                    >
+                                                                        {/* Icono */}
+                                                                        <div className="text-2xl flex-shrink-0 mt-0.5">{notif.icono || '🔔'}</div>
+
+                                                                        {/* Contenido */}
                                                                         <div className="flex-1 min-w-0">
-                                                                            <p className="text-sm font-medium text-gray-800">
+                                                                            <p className="text-sm font-semibold text-gray-800 leading-tight">
                                                                                 {notif.titulo}
                                                                             </p>
-                                                                            <p className="text-xs text-gray-600 mt-1">
+                                                                            <p className="text-xs text-gray-500 mt-0.5 leading-snug">
                                                                                 {notif.mensaje}
                                                                             </p>
-                                                                            <p className="text-xs text-gray-400 mt-2">
-                                                                                {notif.createdAt && new Date(notif.createdAt.toMillis()).toLocaleString('es-ES', {
+                                                                            <p className="text-xs text-gray-400 mt-1.5">
+                                                                                📅 {notif.createdAt && new Date(notif.createdAt.toMillis()).toLocaleString('es-ES', {
                                                                                     day: '2-digit',
                                                                                     month: 'short',
                                                                                     hour: '2-digit',
@@ -1908,11 +1947,17 @@
                                                                                 })}
                                                                             </p>
                                                                         </div>
+
+                                                                        {/* Indicador no leída + acción */}
+                                                                        <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                                                                            <span className="w-2.5 h-2.5 rounded-full bg-purple-500 flex-shrink-0"></span>
+                                                                            <span className="text-xs text-gray-300 group-hover:text-purple-400 transition-colors">✓ Leída</span>
+                                                                        </div>
                                                                     </div>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    )}
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             )}
                                         </div>
@@ -2325,21 +2370,81 @@
             );
         }
 
+        // Tarjeta compacta para vista timeline
+        function TarjetaCompacta({ idea, onExpandir }) {
+            const estadoDot = {
+                incubando: 'bg-yellow-400',
+                activa: 'bg-green-400',
+                realizada: 'bg-blue-400',
+                rechazada: 'bg-red-400',
+                expirada: 'bg-gray-400',
+                eliminada: 'bg-gray-300',
+            };
+            const estadoLabel = {
+                incubando: '🥚 Incubando',
+                activa: '⚡ Activa',
+                realizada: '✓ Realizada',
+                rechazada: '✗ Rechazada',
+                expirada: '⏰ Expirada',
+                eliminada: '🗑️ Eliminada',
+            };
+            const reaccionesCount = Object.keys(idea.reaccionesPorUsuario || {}).length;
+            const comentariosCount = (idea.comentarios || []).length;
+
+            return (
+                <div
+                    className="flex gap-3 py-3 px-2 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors group border-l-4 border-transparent hover:border-purple-300"
+                    onClick={() => onExpandir(idea.id)}
+                >
+                    {/* Línea de tiempo */}
+                    <div className="flex flex-col items-center flex-shrink-0 pt-1">
+                        <div className={`w-3 h-3 rounded-full flex-shrink-0 ${estadoDot[idea.estado] || 'bg-gray-300'}`}></div>
+                        <div className="w-px flex-1 bg-gray-200 mt-1"></div>
+                    </div>
+
+                    {/* Contenido */}
+                    <div className="flex-1 min-w-0 pb-2">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                            <span className="text-xs font-medium text-gray-500">{estadoLabel[idea.estado]}</span>
+                            <span className="text-xs text-gray-300">·</span>
+                            <span className="text-xs text-gray-400">{idea.creadorNombre}</span>
+                            <span className="text-xs text-gray-300">·</span>
+                            <span className="text-xs text-gray-400">
+                                {new Date(idea.createdAt).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                        </div>
+                        <p className="text-sm text-gray-800 line-clamp-2 leading-snug">{idea.texto}</p>
+                        {(reaccionesCount > 0 || comentariosCount > 0) && (
+                            <div className="flex gap-3 mt-1.5">
+                                {reaccionesCount > 0 && <span className="text-xs text-gray-400">❤️ {reaccionesCount}</span>}
+                                {comentariosCount > 0 && <span className="text-xs text-gray-400">💬 {comentariosCount}</span>}
+                            </div>
+                        )}
+                    </div>
+
+                    <span className="text-xs text-gray-300 group-hover:text-purple-400 transition-colors flex-shrink-0 self-start pt-1">▶</span>
+                </div>
+            );
+        }
+
         // Componente IdeasList
         function IdeasList({ ideas, onReaccionar, onComentar, onResponderPropuesta, onAprobar, onRechazar, onMarcarRealizada, onVolverAIncubar, onEnviarAlBasurero, onRestaurar, onEliminarPermanentemente, esArchivo, esBasurero, puedeComentar, puedeEditar, usuarioActual }) {
+            const [vistaCompacta, setVistaCompacta] = useState(false);
+            const [ideaExpandidaId, setIdeaExpandidaId] = useState(null);
+
             if (ideas.length === 0) {
                 return (
                     <div className="text-center py-20">
                         <div className="text-6xl mb-4">{esBasurero ? '🗑️' : '💡'}</div>
                         <h3 className="text-xl font-bold text-gray-800 mb-2">
-                            {esBasurero 
-                                ? 'El basurero está vacío' 
-                                : esArchivo 
-                                    ? 'No hay ideas en este archivo' 
+                            {esBasurero
+                                ? 'El basurero está vacío'
+                                : esArchivo
+                                    ? 'No hay ideas en este archivo'
                                     : 'Aún no hay ideas'}
                         </h3>
                         <p className="text-gray-600">
-                            {esBasurero 
+                            {esBasurero
                                 ? 'Las ideas eliminadas aparecerán aquí por 30 días'
                                 : '¡Sé el primero en compartir una idea creativa!'}
                         </p>
@@ -2347,29 +2452,63 @@
                 );
             }
 
+            const propsTarjeta = { onReaccionar, onComentar, onResponderPropuesta, onAprobar, onRechazar, onMarcarRealizada, onVolverAIncubar, onEnviarAlBasurero, onRestaurar, onEliminarPermanentemente, esArchivo, esBasurero, puedeComentar, puedeEditar, usuarioActual };
+
             return (
-                <div className="space-y-4">
-                    {ideas.map(idea => (
-                        <TarjetaIdea
-                            key={idea.id}
-                            idea={idea}
-                            onReaccionar={onReaccionar}
-                            onComentar={onComentar}
-                            onResponderPropuesta={onResponderPropuesta}
-                            onAprobar={onAprobar}
-                            onRechazar={onRechazar}
-                            onMarcarRealizada={onMarcarRealizada}
-                            onVolverAIncubar={onVolverAIncubar}
-                            onEnviarAlBasurero={onEnviarAlBasurero}
-                            onRestaurar={onRestaurar}
-                            onEliminarPermanentemente={onEliminarPermanentemente}
-                            esArchivo={esArchivo}
-                            esBasurero={esBasurero}
-                            puedeComentar={puedeComentar}
-                            puedeEditar={puedeEditar}
-                            usuarioActual={usuarioActual}
-                        />
-                    ))}
+                <div>
+                    {/* Toggle de vista */}
+                    <div className="flex justify-end mb-3">
+                        <div className="flex bg-gray-100 rounded-lg p-1 gap-1">
+                            <button
+                                onClick={() => setVistaCompacta(false)}
+                                className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${!vistaCompacta ? 'bg-white shadow text-purple-700' : 'text-gray-500 hover:text-gray-700'}`}
+                                title="Vista en tarjetas"
+                            >
+                                ▦ Tarjetas
+                            </button>
+                            <button
+                                onClick={() => setVistaCompacta(true)}
+                                className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${vistaCompacta ? 'bg-white shadow text-purple-700' : 'text-gray-500 hover:text-gray-700'}`}
+                                title="Vista timeline compacta"
+                            >
+                                ☰ Timeline
+                            </button>
+                        </div>
+                    </div>
+
+                    {vistaCompacta ? (
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-100 divide-y divide-gray-50 px-2">
+                            {ideas.map(idea => (
+                                ideaExpandidaId === idea.id ? (
+                                    <div key={idea.id} className="py-3">
+                                        <button
+                                            onClick={() => setIdeaExpandidaId(null)}
+                                            className="text-xs text-purple-500 hover:text-purple-700 mb-2 flex items-center gap-1"
+                                        >
+                                            ▲ Colapsar
+                                        </button>
+                                        <TarjetaIdea key={idea.id} idea={idea} {...propsTarjeta} />
+                                    </div>
+                                ) : (
+                                    <TarjetaCompacta
+                                        key={idea.id}
+                                        idea={idea}
+                                        onExpandir={setIdeaExpandidaId}
+                                    />
+                                )
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="space-y-4">
+                            {ideas.map(idea => (
+                                <TarjetaIdea
+                                    key={idea.id}
+                                    idea={idea}
+                                    {...propsTarjeta}
+                                />
+                            ))}
+                        </div>
+                    )}
                 </div>
             );
         }
@@ -2708,6 +2847,16 @@
                             )}
                         </div>
                     )}
+
+                    {/* Footer: fecha/hora y autor */}
+                    <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between">
+                        <span className="text-xs text-gray-400">
+                            📅 {new Date(idea.createdAt).toLocaleString('es-ES', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                        <span className="text-xs text-gray-500 font-medium">
+                            ✍️ {idea.creadorNombre}
+                        </span>
+                    </div>
 
                     {/* Modal de Aprobar Idea */}
                     {mostrarModalAprobar && (
