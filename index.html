@@ -304,41 +304,83 @@
         function App() {
             const [usuario, setUsuario] = useState(null);
             const [cargando, setCargando] = useState(true);
+            const [errorConexion, setErrorConexion] = useState(false);
 
             useEffect(() => {
-                const unsubscribe = auth.onAuthStateChanged(async (user) => {
-                    if (user) {
-                        // Usuario autenticado
-                        const userDoc = await db.collection('usuarios').doc(user.uid).get();
-                        if (userDoc.exists) {
-                            setUsuario({ uid: user.uid, ...userDoc.data(), emailVerified: user.emailVerified });
-                        } else {
-                            // Crear documento de usuario si no existe
-                            await db.collection('usuarios').doc(user.uid).set({
-                                email: user.email,
-                                nombre: user.displayName || user.email.split('@')[0],
-                                createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                            });
-                            setUsuario({ 
-                                uid: user.uid, 
-                                email: user.email, 
-                                nombre: user.displayName || user.email.split('@')[0],
-                                emailVerified: user.emailVerified
-                            });
-                        }
-                    } else {
-                        setUsuario(null);
+                // Timeout de 10s: si Firebase no responde, mostrar error
+                const timeout = setTimeout(() => {
+                    if (cargando) {
+                        console.error('Firebase Auth timeout: no respondió en 10 segundos');
+                        setErrorConexion(true);
+                        setCargando(false);
                     }
+                }, 10000);
+
+                const unsubscribe = auth.onAuthStateChanged(async (user) => {
+                    clearTimeout(timeout);
+                    try {
+                        if (user) {
+                            const userDoc = await db.collection('usuarios').doc(user.uid).get();
+                            if (userDoc.exists) {
+                                setUsuario({ uid: user.uid, ...userDoc.data(), emailVerified: user.emailVerified });
+                            } else {
+                                await db.collection('usuarios').doc(user.uid).set({
+                                    email: user.email,
+                                    nombre: user.displayName || user.email.split('@')[0],
+                                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                                });
+                                setUsuario({
+                                    uid: user.uid,
+                                    email: user.email,
+                                    nombre: user.displayName || user.email.split('@')[0],
+                                    emailVerified: user.emailVerified
+                                });
+                            }
+                        } else {
+                            setUsuario(null);
+                        }
+                    } catch (err) {
+                        console.error('Error al cargar usuario:', err);
+                        setErrorConexion(true);
+                    }
+                    setCargando(false);
+                }, (err) => {
+                    clearTimeout(timeout);
+                    console.error('Error en auth.onAuthStateChanged:', err);
+                    setErrorConexion(true);
                     setCargando(false);
                 });
 
-                return () => unsubscribe();
+                return () => { clearTimeout(timeout); unsubscribe(); };
             }, []);
 
             if (cargando) {
                 return (
                     <div className="min-h-screen gradient-bg flex items-center justify-center">
-                        <div className="text-white text-2xl font-bold">Cargando...</div>
+                        <div className="text-center text-white">
+                            <div className="text-2xl font-bold mb-2">Cargando...</div>
+                            <div className="text-sm opacity-70">Conectando con Firebase</div>
+                        </div>
+                    </div>
+                );
+            }
+
+            if (errorConexion) {
+                return (
+                    <div className="min-h-screen gradient-bg flex items-center justify-center p-4">
+                        <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full text-center">
+                            <div className="text-5xl mb-4">⚠️</div>
+                            <h2 className="text-xl font-bold text-gray-800 mb-2">Error de conexión</h2>
+                            <p className="text-gray-600 mb-6 text-sm">
+                                No se pudo conectar con Firebase. Verifica tu conexión a internet o intenta de nuevo.
+                            </p>
+                            <button
+                                onClick={() => window.location.reload()}
+                                className="gradient-bg text-white px-6 py-3 rounded-lg font-medium hover:opacity-90 transition-opacity"
+                            >
+                                🔄 Reintentar
+                            </button>
+                        </div>
                     </div>
                 );
             }
