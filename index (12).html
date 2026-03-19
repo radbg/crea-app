@@ -1248,17 +1248,18 @@
                 }
             }
 
-            async function crearIdea(texto, duracion, multimedia = null, tags = []) {
+            async function crearIdea(texto, duracion, multimedia = null, tags = [], esAnonima = false) {
                 try {
                     const ahora = Date.now();
                     const expira = ahora + (duracion * 60 * 60 * 1000);
-                    
+
                     await db.collection('ideas').add({
                         salaId: salaActual,
                         texto: texto,
                         estado: ESTADOS.INCUBANDO,
-                        creadorId: usuario.uid,
-                        creadorNombre: usuario.nombre,
+                        creadorId: esAnonima ? 'anonimo' : usuario.uid,
+                        creadorNombre: esAnonima ? 'Anónimo' : usuario.nombre,
+                        esAnonima: esAnonima,
                         multimedia: multimedia,
                         tags: tags,
                         createdAt: firebase.firestore.Timestamp.fromMillis(ahora),
@@ -2208,6 +2209,7 @@
             const [multimedia, setMultimedia] = useState(null);
             const [uploadingMedia, setUploadingMedia] = useState(false);
             const [tagsSeleccionados, setTagsSeleccionados] = useState([]);
+            const [esAnonima, setEsAnonima] = useState(false);
 
             // Cargar borrador al montar
             useEffect(() => {
@@ -2302,10 +2304,11 @@
             function handleSubmit(e) {
                 e.preventDefault();
                 if (texto.trim()) {
-                    onCrear(texto.trim(), duracion, multimedia, tagsSeleccionados);
+                    onCrear(texto.trim(), duracion, multimedia, tagsSeleccionados, esAnonima);
                     setTexto('');
                     setMultimedia(null);
                     setTagsSeleccionados([]);
+                    setEsAnonima(false);
                     limpiarBorrador();
                 }
             }
@@ -2424,7 +2427,7 @@
                         )}
                         
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mt-3">
-                            <div className="flex items-center gap-4 w-full sm:w-auto">
+                            <div className="flex items-center gap-4 w-full sm:w-auto flex-wrap">
                                 <select
                                     value={duracion}
                                     onChange={(e) => setDuracion(Number(e.target.value))}
@@ -2438,13 +2441,23 @@
                                 <span className="text-sm text-gray-500 whitespace-nowrap">
                                     {texto.length}/{CHAR_LIMIT}
                                 </span>
+                                {/* Checkbox anónimo */}
+                                <label className={`flex items-center gap-2 cursor-pointer px-3 py-2 rounded-lg border-2 transition-all select-none ${esAnonima ? 'border-gray-400 bg-gray-100 text-gray-700' : 'border-gray-200 hover:border-gray-300 text-gray-500'}`}>
+                                    <input
+                                        type="checkbox"
+                                        checked={esAnonima}
+                                        onChange={e => setEsAnonima(e.target.checked)}
+                                        className="rounded accent-gray-500"
+                                    />
+                                    <span className="text-sm font-medium">👤 Anónimo</span>
+                                </label>
                             </div>
                             <button
                                 type="submit"
                                 disabled={texto.trim().length === 0}
-                                className="w-full sm:w-auto gradient-bg text-white px-6 py-3 rounded-lg font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+                                className={`w-full sm:w-auto px-6 py-3 rounded-lg font-medium transition-all disabled:opacity-50 ${esAnonima ? 'bg-gray-600 hover:bg-gray-700 text-white' : 'gradient-bg text-white hover:opacity-90'}`}
                             >
-                                Publicar Idea
+                                {esAnonima ? '👤 Publicar anónimamente' : 'Publicar Idea'}
                             </button>
                         </div>
                     </form>
@@ -2473,7 +2486,7 @@
             const cfg = estadoConfig[idea.estado] || estadoConfig.expirada;
             const reaccionesCount = Object.keys(idea.reaccionesPorUsuario || {}).length;
             const comentariosCount = (idea.comentarios || []).length;
-            const iniciales = (idea.creadorNombre || '?').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+            const iniciales = idea.esAnonima ? '?' : (idea.creadorNombre || '?').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
 
             // Agrupar reacciones para mostrar emojis únicos
             const emojisUsados = [...new Set(Object.values(idea.reaccionesPorUsuario || {}))].slice(0, 3);
@@ -2489,9 +2502,9 @@
                         <div className="w-px flex-1 bg-gradient-to-b from-gray-200 to-transparent mt-1.5 min-h-[16px]"></div>
                     </div>
 
-                    {/* Avatar con iniciales */}
-                    <div className={`w-7 h-7 rounded-full flex-shrink-0 ${cfg.avatarBg} border ${cfg.border} flex items-center justify-center text-xs font-bold ${cfg.textColor} mt-0.5`}>
-                        {iniciales}
+                    {/* Avatar: anónimo muestra 👤, normal muestra iniciales */}
+                    <div className={`w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold mt-0.5 ${idea.esAnonima ? 'bg-gray-100 border border-gray-200 text-gray-500' : `${cfg.avatarBg} border ${cfg.border} ${cfg.textColor}`}`}>
+                        {idea.esAnonima ? '👤' : iniciales}
                     </div>
 
                     {/* Contenido */}
@@ -2500,7 +2513,11 @@
                         <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
                             <span className={`text-xs font-semibold ${cfg.textColor}`}>{cfg.label}</span>
                             <span className="text-gray-300 text-xs">·</span>
-                            <span className="text-xs text-gray-600 font-medium">{idea.creadorNombre}</span>
+                            {idea.esAnonima ? (
+                                <span className="text-xs text-gray-400 italic">Anónimo</span>
+                            ) : (
+                                <span className="text-xs text-gray-600 font-medium">{idea.creadorNombre}</span>
+                            )}
                             <span className="text-gray-300 text-xs">·</span>
                             <span className="text-xs text-gray-400">{tiempoRelativo(idea.createdAt)}</span>
                             {idea.multimedia && <span className="text-xs opacity-60">📎</span>}
@@ -2969,9 +2986,16 @@
                         <span className="text-xs text-gray-400">
                             📅 {new Date(idea.createdAt).toLocaleString('es-ES', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                         </span>
-                        <span className="text-xs text-gray-500 font-medium">
-                            ✍️ {idea.creadorNombre}
-                        </span>
+                        {idea.esAnonima ? (
+                            <span className="flex items-center gap-1.5 text-xs text-gray-500 font-medium bg-gray-100 px-2.5 py-1 rounded-full">
+                                <span>👤</span>
+                                <span>Publicado anónimamente</span>
+                            </span>
+                        ) : (
+                            <span className="text-xs text-gray-500 font-medium">
+                                ✍️ {idea.creadorNombre}
+                            </span>
+                        )}
                     </div>
 
                     {/* Modal de Aprobar Idea */}
